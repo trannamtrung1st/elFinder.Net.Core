@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Yevhen Noskov, Leniel Macaferi, Matt Gordon, Flavio Smirne, Trung Tran</Authors>
+    <Company>N/A</Company>
+    <Copyright></Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/trannamtrung1st/elFinder.Net.Core</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/trannamtrung1st/elFinder.Net.Core</RepositoryUrl>
+    <RepositoryType>OSS</RepositoryType>
+    <PackageTags>elFinder, connector, file-manager, driver</PackageTags>
+    <IsPackable>true</IsPackable>
+    <Description>elFinder.Net.Core Local File System driver.</Description>
+    <PackageIcon>logo.png</PackageIcon>
+    <Version>1.1.1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\elFinder.Net.Core\elFinder.Net.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Assets\logo.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
