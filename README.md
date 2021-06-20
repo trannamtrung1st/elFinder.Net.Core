@@ -3,12 +3,12 @@
 
 ## Instruction
 1. Install the NuGet package: https://www.nuget.org/packages/elFinder.Net.Core/
-2. Look at the [demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/elFinder.Net.Demo31) for an example on how to integrate it into your own web project. (the example uses ASP.NET Core 3.1 and some additional packages listed below).
+2. Look at the [demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/elFinder.Net.Demo31) for an example of how to integrate it into your own web project. (the example uses ASP.NET Core 3.1 and some additional packages listed below).
 
 ## About this repository  
 There are 3 main projects:
 - **elFinder.Net.Core**: the core backend connector for elFinder.
-- **elFinder.Net.AspNetCore**: enable ASP.NET Core 2.2 projects to easily integrate the connector pacakage.
+- **elFinder.Net.AspNetCore**: enable ASP.NET Core 2.2 projects to easily integrate the connector package.
 - **elFinder.Net.Drivers.FileSystem**: the default Local File System driver.
 
 ## Credits
@@ -20,4 +20,4 @@ I create this with some modification that suits my use cases and the repository 
 - Enable customization and logging by using model classes instead of directly returning the IActionResult.
 - Support more commands.
 - Follow the specification from https://github.com/Studio-42/elFinder/wiki more strictly.
-- For more example, please see the [demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/elFinder.Net.Demo31).
+- For more examples, please see the [demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/elFinder.Net.Demo31).
