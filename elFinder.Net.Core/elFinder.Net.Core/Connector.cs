@@ -80,7 +80,7 @@ namespace elFinder.Net.Core
             if (cmd.Args == null) throw new ArgumentNullException(nameof(cmd.Args));
 
             ErrorResponse errResp;
-            HttpStatusCode errSttCode = HttpStatusCode.BadRequest;
+            HttpStatusCode errSttCode = HttpStatusCode.OK;
 
             try
             {
