@@ -1,5 +1,4 @@
-﻿using elFinder.Net.Core.Exceptions;
-using System;
+﻿using System;
 
 namespace elFinder.Net.Core.Models.Response
 {
@@ -7,48 +6,24 @@ namespace elFinder.Net.Core.Models.Response
     {
         public object error { get; set; }
 
-        private Exception _exception;
+        protected readonly Exception exception;
         public Exception GetException()
         {
-            return _exception;
+            return exception;
         }
 
         public ErrorResponse(Exception ex)
         {
-            _exception = ex;
+            exception = ex;
         }
 
         public static class Factory
         {
-            public static ErrorResponse UnknownCommand(Exception ex)
+            public static ErrorResponse AccessDenied(Exception ex)
             {
                 return new ErrorResponse(ex)
                 {
-                    error = ErrorResponse.UnknownCommand
-                };
-            }
-
-            public static ErrorResponse ArchiveType(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.ArchiveType
-                };
-            }
-
-            public static ErrorResponse Exists(ExistsException ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = new[] { ErrorResponse.Exists, ex.Name }
-                };
-            }
-
-            public static ErrorResponse CommandRequired(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.CommandRequired
+                    error = ErrorResponse.AccessDenied
                 };
             }
 
@@ -65,51 +40,6 @@ namespace elFinder.Net.Core.Models.Response
                 return new ErrorResponse(ex)
                 {
                     error = ErrorResponse.FolderNotFound
-                };
-            }
-
-            public static ErrorResponse CommandParams(Exception ex)
-            {
-                if (ex is CommandParamsException pEx)
-                {
-                    return new ErrorResponse(ex)
-                    {
-                        error = new[] { ErrorResponse.CommandParams, pEx.Cmd }
-                    };
-                }
-
-                throw new InvalidOperationException($"Must be {nameof(CommandParamsException)}");
-            }
-
-            public static ErrorResponse PermissionDenied(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.PermissionDenied
-                };
-            }
-
-            public static ErrorResponse UploadFileSize(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.UploadFileSize
-                };
-            }
-
-            public static ErrorResponse CommandNoSupport(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.CommandNoSupport
-                };
-            }
-
-            public static ErrorResponse NotFile(Exception ex)
-            {
-                return new ErrorResponse(ex)
-                {
-                    error = ErrorResponse.NotFile
                 };
             }
 
@@ -135,6 +65,8 @@ namespace elFinder.Net.Core.Models.Response
         public const string ArchiveType = "errArcType";
         public const string Exists = "errExists";
         public const string CommandRequired = "errCmdReq";
+        public const string MakeFile = "errMkfile";
+        public const string AccessDenied = "errAccess";
         public const string FileNotFound = "errFileNotFound";
         public const string FolderNotFound = "errFolderNotFound";
         public const string CommandParams = "errCmdParams";

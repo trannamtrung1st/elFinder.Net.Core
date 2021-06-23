@@ -1,14 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using elFinder.Net.Core.Models.Command;
+using System.Collections.Generic;
 using System.Net.Mime;
 
 namespace elFinder.Net.Core.Models.Options
 {
-    public class ConnectorOptions
+    public class ConnectorResponseOptions
     {
-        private static string[] _disabled = new string[] { "callback", "chmod", "editor", "netmount", "ping" };
-
-        public ConnectorOptions(PathInfo pathInfo, char separator = default)
+        public ConnectorResponseOptions(PathInfo pathInfo, IEnumerable<string> disabled = null, char separator = default)
         {
+            this.disabled = disabled ?? ConnectorCommand.NotSupportedUICommands;
             this.separator = separator == default ? pathInfo.Volume.DirectorySeparatorChar : separator;
             path = pathInfo.Volume.Name;
             if (pathInfo.Path != string.Empty)
@@ -31,7 +31,7 @@ namespace elFinder.Net.Core.Models.Options
 
         public ArchiveOptions archivers { get; set; }
 
-        public IEnumerable<string> disabled => _disabled;
+        public IEnumerable<string> disabled { get; }
 
         public byte copyOverwrite => 1;
 

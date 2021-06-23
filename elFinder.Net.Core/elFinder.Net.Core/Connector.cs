@@ -18,8 +18,9 @@ namespace elFinder.Net.Core
 {
     public interface IConnector
     {
+        ConnectorOptions Options { get; }
+        PluginManager PluginManager { get; }
         IList<IVolume> Volumes { get; set; }
-        MimeDetectOption MimeDetect { get; set; }
         Task<ConnectorResult> ProcessAsync(ConnectorCommand cmd, CancellationTokenSource cancellationTokenSource = default);
         Task<PathInfo> ParsePathAsync(string target,
             bool createIfNotExists = true, bool fileByDefault = true, CancellationToken cancellationToken = default);
@@ -30,24 +31,29 @@ namespace elFinder.Net.Core
 
     public class Connector : IConnector
     {
-        private readonly IPathParser _pathParser;
-        private readonly IPictureEditor _pictureEditor;
-        private readonly IConnectorManager _connectorManager;
+        protected readonly ConnectorOptions options;
+        protected readonly PluginManager pluginManager;
+        protected readonly IPathParser pathParser;
+        protected readonly IPictureEditor pictureEditor;
+        protected readonly IConnectorManager connectorManager;
 
-        public Connector(IPathParser pathParser, IPictureEditor pictureEditor,
+        public Connector(ConnectorOptions options, PluginManager pluginManager,
+            IPathParser pathParser, IPictureEditor pictureEditor,
             IConnectorManager connectorManager)
         {
-            _pathParser = pathParser;
-            _pictureEditor = pictureEditor;
-            _connectorManager = connectorManager;
+            this.options = options;
+            this.pluginManager = pluginManager;
+            this.pathParser = pathParser;
+            this.pictureEditor = pictureEditor;
+            this.connectorManager = connectorManager;
             Volumes = new List<IVolume>();
-            MimeDetect = MimeDetectOption.Auto;
         }
 
-        public IList<IVolume> Volumes { get; set; }
-        public MimeDetectOption MimeDetect { get; set; }
+        public virtual ConnectorOptions Options => options;
+        public virtual IList<IVolume> Volumes { get; set; }
+        public virtual PluginManager PluginManager => pluginManager;
 
-        public async Task<ConnectorResult> ProcessAsync(ConnectorCommand cmd, CancellationTokenSource cancellationTokenSource = default)
+        public virtual async Task<ConnectorResult> ProcessAsync(ConnectorCommand cmd, CancellationTokenSource cancellationTokenSource = default)
         {
             cancellationTokenSource = cancellationTokenSource ?? new CancellationTokenSource();
             var cancellationToken = cancellationTokenSource.Token;
@@ -56,22 +62,22 @@ namespace elFinder.Net.Core
             if (cmd == null) throw new ArgumentNullException(nameof(cmd));
             if (cmd.Args == null) throw new ArgumentNullException(nameof(cmd.Args));
 
-            var hasRedId = !string.IsNullOrEmpty(cmd.ReqId);
+            var hasReqId = !string.IsNullOrEmpty(cmd.ReqId);
 
-            if (hasRedId)
-                _connectorManager.AddCancellationTokenSource(cmd.ReqId, cancellationTokenSource);
+            if (hasReqId)
+                connectorManager.AddCancellationTokenSource(cmd.ReqId, cancellationTokenSource);
 
             var cookies = new Dictionary<string, string>();
             var connResult = await ProcessCoreAsync(cmd, cookies, cancellationToken);
             connResult.Cookies = cookies;
 
-            if (hasRedId)
-                _connectorManager.Release(cmd.ReqId);
+            if (hasReqId)
+                connectorManager.Release(cmd.ReqId);
 
             return connResult;
         }
 
-        protected async Task<ConnectorResult> ProcessCoreAsync(ConnectorCommand cmd, Dictionary<string, string> cookies,
+        protected virtual async Task<ConnectorResult> ProcessCoreAsync(ConnectorCommand cmd, Dictionary<string, string> cookies,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -84,6 +90,8 @@ namespace elFinder.Net.Core
 
             try
             {
+                if (options.EnabledCommands?.Contains(cmd.Cmd) == false) throw new CommandNoSupportException();
+
                 var args = cmd.Args;
                 cmd.Cmd = args.GetValueOrDefault(ConnectorCommand.Param_Cmd);
 
@@ -97,7 +105,7 @@ namespace elFinder.Net.Core
                             var abortCmd = new AbortCommand();
                             abortCmd.Id = args.GetValueOrDefault(ConnectorCommand.Param_Id);
 
-                            var success = await _connectorManager.AbortAsync(abortCmd.Id, cancellationToken);
+                            var success = await connectorManager.AbortAsync(abortCmd.Id, cancellationToken);
 
                             //return ConnectorResult.NoContent(new AbortResponse { success = success });
                             return ConnectorResult.Success(new AbortResponse
@@ -124,7 +132,7 @@ namespace elFinder.Net.Core
                             var openCmd = new OpenCommand();
                             openCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
                             openCmd.TargetPath = await ParsePathAsync(openCmd.Target, createIfNotExists: false, cancellationToken: cancellationToken);
-                            openCmd.Mimes = MimeDetect == MimeDetectOption.Internal
+                            openCmd.Mimes = options.MimeDetect == MimeDetectOption.Internal
                                 ? args.GetValueOrDefault(ConnectorCommand.Param_Mimes)
                                 : default;
                             if (byte.TryParse(args.GetValueOrDefault(ConnectorCommand.Param_Init), out var init))
@@ -336,7 +344,7 @@ namespace elFinder.Net.Core
                             lsCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
                             lsCmd.TargetPath = await ParsePathAsync(lsCmd.Target, cancellationToken: cancellationToken);
                             lsCmd.Intersect = args.GetValueOrDefault(ConnectorCommand.Param_Intersect);
-                            lsCmd.Mimes = MimeDetect == MimeDetectOption.Internal
+                            lsCmd.Mimes = options.MimeDetect == MimeDetectOption.Internal
                                 ? args.GetValueOrDefault(ConnectorCommand.Param_Mimes)
                                 : default;
                             cmd.CmdObject = lsCmd;
@@ -503,7 +511,14 @@ namespace elFinder.Net.Core
                             if (uploadCmd.UploadPathInfos.Any(path => path.Volume != volume))
                                 throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
 
-                            var uploadResp = await volume.Driver.UploadAsync(uploadCmd, cancellationToken);
+                            var initUploadData = await volume.Driver.InitUploadAsync(uploadCmd, cancellationToken);
+                            var uploadResp = initUploadData.Response;
+
+                            foreach (var data in initUploadData.Data)
+                            {
+                                await volume.Driver.UploadAsync(data, initUploadData, cancellationToken);
+                            }
+
                             return ConnectorResult.Success(uploadResp);
                         }
                     case ConnectorCommand.Cmd_Zipdl:
@@ -538,61 +553,42 @@ namespace elFinder.Net.Core
                     default: throw new UnknownCommandException();
                 }
             }
-            catch (CommandRequiredException ex)
+            catch (Exception generalEx)
             {
-                errResp = ErrorResponse.Factory.CommandRequired(ex);
-            }
-            catch (ArchiveTypeException ex)
-            {
-                errResp = ErrorResponse.Factory.ArchiveType(ex);
-            }
-            catch (ExistsException ex)
-            {
-                errResp = ErrorResponse.Factory.Exists(ex);
-            }
-            catch (UnknownCommandException ex)
-            {
-                errResp = ErrorResponse.Factory.UnknownCommand(ex);
-            }
-            catch (FileNotFoundException ex)
-            {
-                errResp = ErrorResponse.Factory.FileNotFound(ex);
-            }
-            catch (DirectoryNotFoundException ex)
-            {
-                errResp = ErrorResponse.Factory.FolderNotFound(ex);
-            }
-            catch (CommandParamsException ex)
-            {
-                errResp = ErrorResponse.Factory.CommandParams(ex);
-            }
-            catch (PermissionDeniedException ex)
-            {
-                errResp = ErrorResponse.Factory.PermissionDenied(ex);
-                errSttCode = HttpStatusCode.Forbidden;
-            }
-            catch (UploadFileSizeException ex)
-            {
-                errResp = ErrorResponse.Factory.UploadFileSize(ex);
-            }
-            catch (CommandNoSupportException ex)
-            {
-                errResp = ErrorResponse.Factory.CommandNoSupport(ex);
-            }
-            catch (NotFileException ex)
-            {
-                errResp = ErrorResponse.Factory.NotFile(ex);
-            }
-            catch (Exception ex)
-            {
-                errResp = ErrorResponse.Factory.Unknown(ex);
-                errSttCode = HttpStatusCode.InternalServerError;
+                var rootCause = generalEx.GetRootCause();
+
+                if (rootCause is ConnectorException ex)
+                {
+                    errResp = ex.ErrorResponse;
+                    if (ex.StatusCode != null) errSttCode = ex.StatusCode.Value;
+                }
+                else if (rootCause is UnauthorizedAccessException uaEx)
+                {
+                    errResp = ErrorResponse.Factory.AccessDenied(uaEx);
+                }
+                else if (rootCause is IOException ioEx)
+                {
+                    errResp = ErrorResponse.Factory.AccessDenied(ioEx);
+                }
+                else if (rootCause is FileNotFoundException fnfEx)
+                {
+                    errResp = ErrorResponse.Factory.FileNotFound(fnfEx);
+                }
+                else if (rootCause is DirectoryNotFoundException dnfEx)
+                {
+                    errResp = ErrorResponse.Factory.FolderNotFound(dnfEx);
+                }
+                else
+                {
+                    errResp = ErrorResponse.Factory.Unknown(generalEx);
+                    errSttCode = HttpStatusCode.InternalServerError;
+                }
             }
 
             return ConnectorResult.Error(errResp, errSttCode);
         }
 
-        public async Task<PathInfo> ParsePathAsync(string target,
+        public virtual async Task<PathInfo> ParsePathAsync(string target,
             bool createIfNotExists = true, bool fileByDefault = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -602,7 +598,7 @@ namespace elFinder.Net.Core
             var underscoreIdx = target.IndexOf('_');
             var volumeId = target.Substring(0, underscoreIdx + 1);
             var pathHash = target.Substring(underscoreIdx + 1);
-            var filePath = _pathParser.Decode(pathHash);
+            var filePath = pathParser.Decode(pathHash);
 
             IVolume volume = Volumes.FirstOrDefault(v => v.VolumeId == volumeId);
 
@@ -611,7 +607,7 @@ namespace elFinder.Net.Core
             return await volume.Driver.ParsePathAsync(filePath, volume, target, createIfNotExists, fileByDefault, cancellationToken);
         }
 
-        public string AddVolume(IVolume volume)
+        public virtual string AddVolume(IVolume volume)
         {
             Volumes.Add(volume);
 
@@ -621,7 +617,7 @@ namespace elFinder.Net.Core
             return volume.VolumeId;
         }
 
-        public async Task<ImageWithMimeType> GetThumbAsync(string target, CancellationToken cancellationToken = default)
+        public virtual async Task<ImageWithMimeType> GetThumbAsync(string target, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -629,7 +625,7 @@ namespace elFinder.Net.Core
             {
                 var pathInfo = await ParsePathAsync(target, cancellationToken: cancellationToken);
 
-                if (pathInfo.CanCreateThumbnail(_pictureEditor))
+                if (pathInfo.CanCreateThumbnail(pictureEditor))
                 {
                     if (!pathInfo.File.CanGetThumb()) return null;
 
@@ -654,13 +650,13 @@ namespace elFinder.Net.Core
                         if (!await thumbFile.ExistsAsync)
                         {
                             var thumb = await thumbFile.CreateThumbAsync(
-                                fullPath, pathInfo.Volume.ThumbnailSize, _pictureEditor, cancellationToken);
+                                fullPath, pathInfo.Volume.ThumbnailSize, pictureEditor, cancellationToken);
                             thumb.ImageStream.Position = 0;
                             return thumb;
                         }
                         else
                         {
-                            string mimeType = MimeHelper.GetMimeType(_pictureEditor.ConvertThumbnailExtension(thumbFile.Extension));
+                            string mimeType = MimeHelper.GetMimeType(pictureEditor.ConvertThumbnailExtension(thumbFile.Extension));
                             return new ImageWithMimeType(mimeType, await thumbFile.OpenReadAsync(cancellationToken));
                         }
                     }
@@ -668,7 +664,7 @@ namespace elFinder.Net.Core
                     {
                         using (var original = await pathInfo.File.OpenReadAsync(cancellationToken))
                         {
-                            return _pictureEditor.GenerateThumbnail(original, pathInfo.Volume.ThumbnailSize, true);
+                            return pictureEditor.GenerateThumbnail(original, pathInfo.Volume.ThumbnailSize, true);
                         }
                     }
                 }
@@ -677,7 +673,7 @@ namespace elFinder.Net.Core
             return null;
         }
 
-        public async Task<IEnumerable<PathInfo>> ParsePathsAsync(IEnumerable<string> targets, CancellationToken cancellationToken = default)
+        public virtual async Task<IEnumerable<PathInfo>> ParsePathsAsync(IEnumerable<string> targets, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 

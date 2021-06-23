@@ -69,12 +69,12 @@ namespace elFinder.Net.Core.Http
     /// </summary>
     public class FormFileWrapper : IFormFileWrapper
     {
-        private const int DefaultBufferSize = 80 * 1024;
-        private readonly Stream _baseStream;
+        public const int DefaultBufferSize = 80 * 1024;
+        protected readonly Stream baseStream;
 
         public FormFileWrapper(Stream baseStream, long length, string name, string fileName)
         {
-            _baseStream = baseStream;
+            this.baseStream = baseStream;
             Length = length;
             Name = name;
             FileName = fileName;
@@ -123,7 +123,7 @@ namespace elFinder.Net.Core.Http
         /// </summary>
         public Stream OpenReadStream()
         {
-            return _baseStream;
+            return baseStream;
         }
 
         /// <summary>
@@ -137,9 +137,9 @@ namespace elFinder.Net.Core.Http
                 throw new ArgumentNullException(nameof(target));
             }
 
-            using (_baseStream)
+            using (baseStream)
             {
-                _baseStream.CopyTo(target);
+                baseStream.CopyTo(target);
             }
         }
 
@@ -155,9 +155,9 @@ namespace elFinder.Net.Core.Http
                 throw new ArgumentNullException(nameof(target));
             }
 
-            using (_baseStream)
+            using (baseStream)
             {
-                await _baseStream.CopyToAsync(target, DefaultBufferSize, cancellationToken);
+                await baseStream.CopyToAsync(target, DefaultBufferSize, cancellationToken);
             }
         }
     }

@@ -9,13 +9,23 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.AspNetCore", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Drivers.FileSystem", "elFinder.Net.Drivers.FileSystem\elFinder.Net.Drivers.FileSystem.csproj", "{7495FD09-F449-4DD3-B327-C9F69F967D09}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Demo31", "elFinder.Net.Demo31\elFinder.Net.Demo31.csproj", "{3BA32701-9F74-4EC7-BE7A-CA4D809C1134}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{86798A1B-6E8E-4089-914A-20E359A07512}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Test", "Test\elFinder.Net.Test\elFinder.Net.Test.csproj", "{A859620B-217A-45E5-BC62-B41C14677EA1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Test.Automation", "Test\elFinder.Net.Test.Automation\elFinder.Net.Test.Automation.csproj", "{E70C571D-7EB2-49F0-8245-9CFA32066984}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Plugins", "Plugins", "{96C58811-5645-4233-A4FB-57BDAB25214D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Demos", "Demos", "{F39F8DEC-468B-4805-9DE7-B57623E65792}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.AdvancedDemo", "Demos\elFinder.Net.AdvancedDemo\elFinder.Net.AdvancedDemo.csproj", "{CCCDDEDD-526A-45AF-BBFF-70CC6543C300}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Demo31", "Demos\elFinder.Net.Demo31\elFinder.Net.Demo31.csproj", "{6AF06FAA-2613-4218-87F0-34F1A84D77CD}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Plugins.FileSystemQuotaManagement", "Plugins\elFinder.Net.Plugins.FileSystemQuotaManagement\elFinder.Net.Plugins.FileSystemQuotaManagement.csproj", "{23E11159-24A7-4492-8319-75C6730D0C67}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "elFinder.Net.Plugins.LoggingExample", "Plugins\elFinder.Net.Plugins.LoggingExample\elFinder.Net.Plugins.LoggingExample.csproj", "{6F090BE2-19E4-4C1E-A4F5-7DF33758235E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -35,10 +45,6 @@ Global
 		{7495FD09-F449-4DD3-B327-C9F69F967D09}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7495FD09-F449-4DD3-B327-C9F69F967D09}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7495FD09-F449-4DD3-B327-C9F69F967D09}.Release|Any CPU.Build.0 = Release|Any CPU
-		{3BA32701-9F74-4EC7-BE7A-CA4D809C1134}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3BA32701-9F74-4EC7-BE7A-CA4D809C1134}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3BA32701-9F74-4EC7-BE7A-CA4D809C1134}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3BA32701-9F74-4EC7-BE7A-CA4D809C1134}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A859620B-217A-45E5-BC62-B41C14677EA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A859620B-217A-45E5-BC62-B41C14677EA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A859620B-217A-45E5-BC62-B41C14677EA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -47,6 +53,22 @@ Global
 		{E70C571D-7EB2-49F0-8245-9CFA32066984}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E70C571D-7EB2-49F0-8245-9CFA32066984}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E70C571D-7EB2-49F0-8245-9CFA32066984}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCCDDEDD-526A-45AF-BBFF-70CC6543C300}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCCDDEDD-526A-45AF-BBFF-70CC6543C300}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCCDDEDD-526A-45AF-BBFF-70CC6543C300}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCCDDEDD-526A-45AF-BBFF-70CC6543C300}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6AF06FAA-2613-4218-87F0-34F1A84D77CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AF06FAA-2613-4218-87F0-34F1A84D77CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AF06FAA-2613-4218-87F0-34F1A84D77CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AF06FAA-2613-4218-87F0-34F1A84D77CD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23E11159-24A7-4492-8319-75C6730D0C67}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23E11159-24A7-4492-8319-75C6730D0C67}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23E11159-24A7-4492-8319-75C6730D0C67}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23E11159-24A7-4492-8319-75C6730D0C67}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F090BE2-19E4-4C1E-A4F5-7DF33758235E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F090BE2-19E4-4C1E-A4F5-7DF33758235E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F090BE2-19E4-4C1E-A4F5-7DF33758235E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F090BE2-19E4-4C1E-A4F5-7DF33758235E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -54,6 +76,10 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{A859620B-217A-45E5-BC62-B41C14677EA1} = {86798A1B-6E8E-4089-914A-20E359A07512}
 		{E70C571D-7EB2-49F0-8245-9CFA32066984} = {86798A1B-6E8E-4089-914A-20E359A07512}
+		{CCCDDEDD-526A-45AF-BBFF-70CC6543C300} = {F39F8DEC-468B-4805-9DE7-B57623E65792}
+		{6AF06FAA-2613-4218-87F0-34F1A84D77CD} = {F39F8DEC-468B-4805-9DE7-B57623E65792}
+		{23E11159-24A7-4492-8319-75C6730D0C67} = {96C58811-5645-4233-A4FB-57BDAB25214D}
+		{6F090BE2-19E4-4C1E-A4F5-7DF33758235E} = {96C58811-5645-4233-A4FB-57BDAB25214D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3938794F-B875-4849-B2A9-FD5102445AFD}

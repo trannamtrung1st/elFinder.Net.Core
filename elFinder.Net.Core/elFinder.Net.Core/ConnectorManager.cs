@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +12,7 @@ namespace elFinder.Net.Core
         void AddCancellationTokenSource(string reqId, CancellationTokenSource cancellationTokenSource);
         Task<bool> AbortAsync(string reqId, CancellationToken cancellationToken = default);
         bool Release(string reqId);
+        void LockDirectoryAndProceed(string dir, Func<Task> action);
     }
 
     public class ConnectorManagerOptions
@@ -28,23 +28,27 @@ namespace elFinder.Net.Core
 
     public class ConnectorManager : IConnectorManager
     {
-        private readonly ConcurrentDictionary<string, (CancellationTokenSource Source, DateTimeOffset CreatedTime)> _tokenMaps;
-        private readonly IOptionsMonitor<ConnectorManagerOptions> _options;
+        protected readonly ConcurrentDictionary<string, object> directoryLocks;
+        protected readonly ConcurrentDictionary<string, long> directoryLockStatuses;
+        protected readonly ConcurrentDictionary<string, (CancellationTokenSource Source, DateTimeOffset CreatedTime)> tokenMaps;
+        protected readonly IOptionsMonitor<ConnectorManagerOptions> options;
 
         public ConnectorManager(IOptionsMonitor<ConnectorManagerOptions> options)
         {
-            _tokenMaps = new ConcurrentDictionary<string, (CancellationTokenSource Source, DateTimeOffset CreatedTime)>();
-            _options = options;
-            StartWorker();
+            directoryLocks = new ConcurrentDictionary<string, object>();
+            directoryLockStatuses = new ConcurrentDictionary<string, long>();
+            tokenMaps = new ConcurrentDictionary<string, (CancellationTokenSource Source, DateTimeOffset CreatedTime)>();
+            this.options = options;
+            StartRequestIdCleaner();
         }
 
-        public Task<bool> AbortAsync(string reqId, CancellationToken cancellationToken = default)
+        public virtual Task<bool> AbortAsync(string reqId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             (CancellationTokenSource Source, DateTimeOffset CreatedTime) token;
 
-            if (_tokenMaps.TryRemove(reqId, out token))
+            if (tokenMaps.TryRemove(reqId, out token))
             {
                 token.Source.Cancel();
                 return Task.FromResult(true);
@@ -53,38 +57,70 @@ namespace elFinder.Net.Core
             return Task.FromResult(false);
         }
 
-        public void AddCancellationTokenSource(string reqId, CancellationTokenSource cancellationTokenSource)
+        public virtual void AddCancellationTokenSource(string reqId, CancellationTokenSource cancellationTokenSource)
         {
-            if (_tokenMaps.Count >= _options.CurrentValue.MaximumItems) return;
+            if (tokenMaps.Count >= options.CurrentValue.MaximumItems) return;
 
             (CancellationTokenSource Source, DateTimeOffset CreatedTime) currentToken;
 
-            if (_tokenMaps.TryRemove(reqId, out currentToken))
+            if (tokenMaps.TryRemove(reqId, out currentToken))
                 currentToken.Source.Cancel();
 
-            _tokenMaps[reqId] = (cancellationTokenSource, DateTimeOffset.UtcNow);
+            tokenMaps[reqId] = (cancellationTokenSource, DateTimeOffset.UtcNow);
         }
 
-        public bool Release(string reqId)
+        public virtual bool Release(string reqId)
         {
-            return _tokenMaps.TryRemove(reqId, out _);
+            return tokenMaps.TryRemove(reqId, out _);
         }
 
-        private void StartWorker()
+        #region Directory lock
+        public void LockDirectoryAndProceed(string dir, Func<Task> action)
         {
-            var expiredTimespan = TimeSpan.FromMinutes(_options.CurrentValue.TokenSourceCachingMinutes);
+            directoryLockStatuses.GetOrAdd(dir, 0);
+            directoryLockStatuses[dir]++;
+            var volumeLock = directoryLocks.GetOrAdd(dir, (key) => new object());
+            Exception finalEx = null;
+
+            lock (volumeLock)
+            {
+                directoryLockStatuses[dir]--;
+
+                try
+                {
+                    action().Wait();
+                }
+                catch (Exception ex)
+                {
+                    finalEx = ex;
+                }
+
+                if (directoryLockStatuses[dir] == 0)
+                {
+                    directoryLockStatuses.TryRemove(dir, out _);
+                    directoryLocks.TryRemove(dir, out _);
+                }
+
+                if (finalEx != null) throw finalEx;
+            }
+        }
+        #endregion
+
+        protected virtual void StartRequestIdCleaner()
+        {
+            var expiredTimespan = TimeSpan.FromMinutes(options.CurrentValue.TokenSourceCachingMinutes);
             var running = true;
 
             Thread thread = new Thread(() =>
             {
                 while (running)
                 {
-                    var sleepMins = _options.CurrentValue.PollingIntervalInMinutes == 0 ?
-                        ConnectorManagerOptions.DefaultPollingIntervalInMinutes : _options.CurrentValue.PollingIntervalInMinutes;
+                    var sleepMins = options.CurrentValue.PollingIntervalInMinutes == 0 ?
+                        ConnectorManagerOptions.DefaultPollingIntervalInMinutes : options.CurrentValue.PollingIntervalInMinutes;
 
                     Thread.Sleep(TimeSpan.FromMinutes(sleepMins));
 
-                    var expiredTokens = _tokenMaps.Where(token =>
+                    var expiredTokens = tokenMaps.Where(token =>
                     {
                         var lifeTime = DateTimeOffset.UtcNow - token.Value.CreatedTime;
                         return lifeTime >= expiredTimespan;
@@ -94,7 +130,7 @@ namespace elFinder.Net.Core
                     {
                         try
                         {
-                            _tokenMaps.TryRemove(token.Key, out _);
+                            tokenMaps.TryRemove(token.Key, out _);
                             token.Value.Source.Cancel();
                         }
                         catch (Exception) { }

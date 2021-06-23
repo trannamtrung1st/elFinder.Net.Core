@@ -27,15 +27,15 @@ namespace elFinder.Net.Core.Services.Drawing
 
         #region IPictureEditor Members
 
-        public Color BackgroundColor { get; set; }
+        public virtual Color BackgroundColor { get; set; }
 
-        public bool CanProcessFile(string fileExtension)
+        public virtual bool CanProcessFile(string fileExtension)
         {
             string ext = fileExtension.ToLower();
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".tiff";
         }
 
-        public string ConvertThumbnailExtension(string originalImageExtension)
+        public virtual string ConvertThumbnailExtension(string originalImageExtension)
         {
             string ext = originalImageExtension.ToLower();
             if (ext == ".tiff")
@@ -53,7 +53,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType Crop(Stream input, int x, int y, int width, int height, long? quality = null)
+        public virtual ImageWithMimeType Crop(Stream input, int x, int y, int width, int height, long? quality = null)
         {
             using (var image = Image.FromStream(input))
             {
@@ -61,7 +61,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType GenerateThumbnail(Stream input, int size, bool keepAspectRatio)
+        public virtual ImageWithMimeType GenerateThumbnail(Stream input, int size, bool keepAspectRatio)
         {
             using (var inputImage = Image.FromStream(input))
             {
@@ -92,7 +92,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public Size ImageSize(Stream input)
+        public virtual Size ImageSize(Stream input)
         {
             using (var image = Image.FromStream(input))
             {
@@ -100,7 +100,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public Size ImageSize(string fullPath)
+        public virtual Size ImageSize(string fullPath)
         {
             using (var image = Image.FromFile(fullPath))
             {
@@ -108,7 +108,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType Resize(Stream input, int width, int height, long? quality = null)
+        public virtual ImageWithMimeType Resize(Stream input, int width, int height, long? quality = null)
         {
             using (var image = Image.FromStream(input))
             {
@@ -116,7 +116,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType Rotate(Stream input, int angle, Color? background = null, long? quality = null)
+        public virtual ImageWithMimeType Rotate(Stream input, int angle, Color? background = null, long? quality = null)
         {
             using (var image = Image.FromStream(input))
             {
@@ -124,7 +124,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType Rotate(Stream input, int angle, string backgroundHex = null, long? quality = null)
+        public virtual ImageWithMimeType Rotate(Stream input, int angle, string backgroundHex = null, long? quality = null)
         {
             Color? bgColor = null;
 
@@ -140,7 +140,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public ImageWithMimeType ChangeQuality(Image image, ImageFormat imageFormat, long value)
+        public virtual ImageWithMimeType ChangeQuality(Image image, ImageFormat imageFormat, long value)
         {
             var qualityEncoder = Encoder.Quality;
             var parameters = new EncoderParameters(1);
@@ -172,7 +172,7 @@ namespace elFinder.Net.Core.Services.Drawing
         /// <returns>A new <see cref="System.Drawing.Bitmap"/> that is just large enough to contain the rotated image without cutting any corners off.</returns>
         /// <remarks>Original code can be found at http://www.codeproject.com/Articles/58815/C-Image-PictureBox-Rotations </remarks>
         /// <exception cref="System.ArgumentNullException">Thrown if <see cref="image"/> is null.</exception>
-        private ImageWithMimeType Rotate(Image image, float degrees, Color? background, long? quality = null)
+        protected virtual ImageWithMimeType Rotate(Image image, float degrees, Color? background, long? quality = null)
         {
             if (image == null)
             {
@@ -275,7 +275,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        private ImageWithMimeType SaveImage(Image image, ImageFormat imageFormat)
+        protected virtual ImageWithMimeType SaveImage(Image image, ImageFormat imageFormat)
         {
             var memoryStream = new MemoryStream(); // Will be disposed when "ImageWithMimeType" is disposed
 
@@ -299,7 +299,7 @@ namespace elFinder.Net.Core.Services.Drawing
             return new ImageWithMimeType(mimeType, memoryStream);
         }
 
-        private ImageWithMimeType ScaleOrCrop(Image image, Rectangle source, Rectangle destination, long? quality = null)
+        protected virtual ImageWithMimeType ScaleOrCrop(Image image, Rectangle source, Rectangle destination, long? quality = null)
         {
             using (var newImage = new Bitmap(destination.Width, destination.Height))
             {
@@ -316,7 +316,7 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        private ImageCodecInfo GetEncoderInfo(string mimeType)
+        protected virtual ImageCodecInfo GetEncoderInfo(string mimeType)
         {
             int j;
             ImageCodecInfo[] encoders;

@@ -13,7 +13,7 @@ namespace elFinder.Net.Core.Services
 
     public class PathParser : IPathParser
     {
-        public string Decode(string hash)
+        public virtual string Decode(string hash)
         {
             if (string.IsNullOrEmpty(hash))
             {
@@ -47,13 +47,13 @@ namespace elFinder.Net.Core.Services
             return path;
         }
 
-        public string Decrypt(string path)
+        public virtual string Decrypt(string path)
         {
             // default
             return path;
         }
 
-        public string Encode(string path)
+        public virtual string Encode(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -85,7 +85,7 @@ namespace elFinder.Net.Core.Services
             return new string(pathChars);
         }
 
-        public string Encrypt(string path)
+        public virtual string Encrypt(string path)
         {
             // default
             return path;

@@ -4,7 +4,7 @@ namespace elFinder.Net.Core.Models.Response
 {
     public class GetResponse
     {
-        private Exception _exception;
+        protected Exception exception;
 
         public object content { get; set; }
         public string encoding { get; set; }
@@ -12,12 +12,12 @@ namespace elFinder.Net.Core.Models.Response
 
         public Exception GetException()
         {
-            return _exception;
+            return exception;
         }
 
         public void SetException(Exception ex)
         {
-            _exception = ex;
+            exception = ex;
         }
     }
 }

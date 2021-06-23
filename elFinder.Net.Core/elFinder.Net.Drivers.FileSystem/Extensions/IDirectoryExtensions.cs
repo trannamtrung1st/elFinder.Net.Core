@@ -46,5 +46,10 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
         {
             return dir.ObjectAttribute.Write;
         }
+
+        public static bool FileExists(this IDirectory directory)
+        {
+            return File.Exists(directory.FullName);
+        }
     }
 }

@@ -7,6 +7,8 @@ namespace elFinder.Net.Core
 {
     public interface IFileSystem
     {
+        IVolume Volume { get; }
+
         IDirectory Parent { get; }
 
         FileAttributes Attributes { get; set; }

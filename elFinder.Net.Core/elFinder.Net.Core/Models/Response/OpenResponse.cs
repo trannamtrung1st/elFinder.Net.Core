@@ -8,7 +8,7 @@ namespace elFinder.Net.Core.Models.Response
     {
         private static readonly DebugResponse _debug = new DebugResponse();
 
-        public OpenResponse(BaseInfoResponse cwd, ConnectorOptions options)
+        public OpenResponse(BaseInfoResponse cwd, ConnectorResponseOptions options)
         {
             files = new List<object>();
             this.cwd = cwd;
@@ -22,6 +22,6 @@ namespace elFinder.Net.Core.Models.Response
 
         public List<object> files { get; protected set; }
 
-        public ConnectorOptions options { get; protected set; }
+        public ConnectorResponseOptions options { get; protected set; }
     }
 }
