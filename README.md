@@ -16,7 +16,7 @@ This plugin intercepts all method calls of `IConnector` and `IDriver` instances 
 ## Customization
 Since file management is a complex topic and the requirements are diverse, here are some ways to customize the library:
 1. Override the default implementation
-2. Use interceptors (as those plugins here which use [Castle DynamicProxy](http://www.castleproject.org/projects/dynamicproxy/)) and built-in .NET Core DI container
+2. Use interceptors (as those plugins here which use [Castle DynamicProxy](http://www.castleproject.org/projects/dynamicproxy/) and built-in .NET Core DI container).
 
 Some important classes and their descriptions:
 - `IConnector/Connector`: the backend connector which handles elFinder commands sent from clients.
