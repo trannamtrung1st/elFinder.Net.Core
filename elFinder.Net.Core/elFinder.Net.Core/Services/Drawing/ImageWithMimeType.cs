@@ -11,9 +11,9 @@ namespace elFinder.Net.Core.Services.Drawing
             ImageStream = stream;
         }
 
-        public Stream ImageStream { get; private set; }
+        public Stream ImageStream { get; protected set; }
 
-        public string MimeType { get; private set; }
+        public string MimeType { get; protected set; }
 
         #region IDisposable Support
 

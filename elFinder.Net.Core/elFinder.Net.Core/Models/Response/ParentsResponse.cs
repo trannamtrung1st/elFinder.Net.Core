@@ -9,6 +9,6 @@ namespace elFinder.Net.Core.Models.Response
             tree = new List<object>();
         }
 
-        public List<object> tree { get; private set; }
+        public List<object> tree { get; protected set; }
     }
 }

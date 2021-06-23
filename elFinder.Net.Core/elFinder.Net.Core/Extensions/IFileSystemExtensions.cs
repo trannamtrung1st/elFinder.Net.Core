@@ -1,6 +1,4 @@
 ﻿using elFinder.Net.Core.Services;
-using System;
-using System.Linq;
 
 namespace elFinder.Net.Core.Extensions
 {

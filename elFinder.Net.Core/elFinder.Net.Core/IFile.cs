@@ -18,9 +18,9 @@ namespace elFinder.Net.Core
 
         Task<Stream> OpenReadAsync(CancellationToken cancellationToken = default);
 
-        Task WriteAsync(Stream stream, CancellationToken cancellationToken = default);
+        Task OverwriteAsync(Stream stream, CancellationToken cancellationToken = default);
 
-        Task<Stream> OpenWriteAsync(CancellationToken cancellationToken = default);
+        Task<Stream> OpenWriteAsync(FileMode fileMode = FileMode.Create, CancellationToken cancellationToken = default);
 
         Task<Stream> CreateAsync(CancellationToken cancellationToken = default);
 

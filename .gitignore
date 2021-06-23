@@ -348,10 +348,12 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
-elFinder.Net.Core/elFinder.Net.Demo/wwwroot/lib/
-elFinder.Net.Core/elFinder.Net.Demo/wwwroot/upload/
-elFinder.Net.Core/elFinder.Net.Demo31/wwwroot/upload/
-elFinder.Net.Core/elFinder.Net.Demo31/wwwroot/upload-2/
-elFinder.Net.Core/elFinder.Net.Demo31/thumb/
+
+elFinder.Net.Core/Demos/elFinder.Net.Demo31/wwwroot/upload/
+elFinder.Net.Core/Demos/elFinder.Net.Demo31/wwwroot/upload-2/
+elFinder.Net.Core/Demos/elFinder.Net.Demo31/thumb/
 *.exe
-elFinder.Net.Core/elFinder.Net.Demo31/wwwroot/lib/
+elFinder.Net.Core/Demos/elFinder.Net.Demo31/wwwroot/lib/
+elFinder.Net.Core/Demos/elFinder.Net.AdvancedDemo/wwwroot/lib/
+elFinder.Net.Core/Demos/elFinder.Net.AdvancedDemo/wwwroot/upload/
+elFinder.Net.Core/Demos/elFinder.Net.AdvancedDemo/thumb/

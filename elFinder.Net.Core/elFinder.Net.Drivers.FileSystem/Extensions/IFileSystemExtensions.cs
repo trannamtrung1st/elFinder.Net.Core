@@ -1,7 +1,4 @@
 ﻿using elFinder.Net.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace elFinder.Net.Drivers.FileSystem.Extensions

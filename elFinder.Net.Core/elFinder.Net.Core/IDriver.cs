@@ -30,7 +30,8 @@ namespace elFinder.Net.Core
         Task<RenameResponse> RenameAsync(RenameCommand cmd, CancellationToken cancellationToken = default);
         Task<TreeResponse> TreeAsync(TreeCommand cmd, CancellationToken cancellationToken = default);
         Task<SearchResponse> SearchAsync(SearchCommand cmd, CancellationToken cancellationToken = default);
-        Task<UploadResponse> UploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
+        Task<InitUploadData> InitUploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
+        Task UploadAsync(UploadData uploadData, InitUploadData initData, CancellationToken cancellationToken = default);
         Task<ResizeResponse> ResizeAsync(ResizeCommand cmd, CancellationToken cancellationToken = default);
         Task<Zipdl1stResponse> ZipdlAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
         Task<FileResponse> ZipdlRawAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);

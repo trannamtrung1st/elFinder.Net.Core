@@ -42,7 +42,7 @@ namespace elFinder.Net.Demo31
         public void ConfigureServices(IServiceCollection services)
         {
             #region elFinder
-            services.AddElFinderAspNetCore(connector => connector.MimeDetect = MimeDetectOption.Internal)
+            services.AddElFinderAspNetCore()
                 .AddFileSystemDriver();
 
             services.AddTransient<IVolume>(provider =>

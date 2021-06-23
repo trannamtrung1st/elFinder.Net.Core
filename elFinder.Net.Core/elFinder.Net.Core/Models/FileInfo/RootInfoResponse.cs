@@ -5,6 +5,6 @@ namespace elFinder.Net.Core.Models.FileInfo
     public class RootInfoResponse : DirectoryInfoResponse
     {
         public byte isroot { get; set; }
-        public ConnectorOptions options { get; set; }
+        public ConnectorResponseOptions options { get; set; }
     }
 }

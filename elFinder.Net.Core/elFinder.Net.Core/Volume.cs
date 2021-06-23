@@ -86,13 +86,13 @@ namespace elFinder.Net.Core
             ThumbnailSize = 48;
         }
 
-        public string VolumeId { get; set; }
-        public string Name { get; set; }
-        public string Url { get; }
-        public string RootDirectory { get; }
+        public virtual string VolumeId { get; set; }
+        public virtual string Name { get; set; }
+        public virtual string Url { get; }
+        public virtual string RootDirectory { get; }
 
         private string _startDirectory;
-        public string StartDirectory
+        public virtual string StartDirectory
         {
             get => _startDirectory; set
             {
@@ -102,20 +102,20 @@ namespace elFinder.Net.Core
                 _startDirectory = value;
             }
         }
-        public string ThumbnailUrl { get; set; }
-        public string ThumbnailDirectory { get; set; }
-        public int ThumbnailSize { get; set; }
-        public char DirectorySeparatorChar { get; set; }
-        public bool UploadOverwrite { get; set; }
-        public bool CopyOverwrite { get; set; }
-        public bool IsShowOnly { get; set; }
-        public bool IsReadOnly { get; set; }
-        public bool IsLocked { get; set; }
-        public IDriver Driver { get; }
-        public IEnumerable<FilteredObjectAttribute> ObjectAttributes { get; set; }
+        public virtual string ThumbnailUrl { get; set; }
+        public virtual string ThumbnailDirectory { get; set; }
+        public virtual int ThumbnailSize { get; set; }
+        public virtual char DirectorySeparatorChar { get; set; }
+        public virtual bool UploadOverwrite { get; set; }
+        public virtual bool CopyOverwrite { get; set; }
+        public virtual bool IsShowOnly { get; set; }
+        public virtual bool IsReadOnly { get; set; }
+        public virtual bool IsLocked { get; set; }
+        public virtual IDriver Driver { get; }
+        public virtual IEnumerable<FilteredObjectAttribute> ObjectAttributes { get; set; }
 
         private ObjectAttribute _defaultAttribute = ObjectAttribute.Default;
-        public ObjectAttribute DefaultObjectAttribute
+        public virtual ObjectAttribute DefaultObjectAttribute
         {
             get => _defaultAttribute; set
             {
@@ -124,21 +124,21 @@ namespace elFinder.Net.Core
             }
         }
 
-        public double? MaxUploadSize { get; set; }
+        public virtual double? MaxUploadSize { get; set; }
 
-        public double? MaxUploadSizeInKb
+        public virtual double? MaxUploadSizeInKb
         {
             get { return MaxUploadSize.HasValue ? (double?)(MaxUploadSize.Value / 1024.0) : null; }
             set { MaxUploadSize = value.HasValue ? (value * 1024) : null; }
         }
 
-        public double? MaxUploadSizeInMb
+        public virtual double? MaxUploadSizeInMb
         {
             get { return MaxUploadSizeInKb.HasValue ? (double?)(MaxUploadSizeInKb.Value / 1024.0) : null; }
             set { MaxUploadSizeInKb = value.HasValue ? (value * 1024) : null; }
         }
 
-        public async Task<string> GenerateThumbHashAsync(IFile originalImage, IPathParser pathParser, IPictureEditor pictureEditor,
+        public virtual async Task<string> GenerateThumbHashAsync(IFile originalImage, IPathParser pathParser, IPictureEditor pictureEditor,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -158,7 +158,7 @@ namespace elFinder.Net.Core
             }
         }
 
-        public async Task<string> GenerateThumbPathAsync(IFile originalImage, IPictureEditor pictureEditor,
+        public virtual async Task<string> GenerateThumbPathAsync(IFile originalImage, IPictureEditor pictureEditor,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -176,7 +176,7 @@ namespace elFinder.Net.Core
             return $"{thumbDir}{DirectorySeparatorChar}{thumbName}";
         }
 
-        public Task<string> GenerateThumbPathAsync(IDirectory directory, CancellationToken cancellationToken = default)
+        public virtual Task<string> GenerateThumbPathAsync(IDirectory directory, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -190,27 +190,27 @@ namespace elFinder.Net.Core
             return Task.FromResult(thumbDir);
         }
 
-        public bool IsRoot(IFileSystem fileSystem)
+        public virtual bool IsRoot(IFileSystem fileSystem)
         {
             return fileSystem.FullName.Length == RootDirectory.Length;
         }
 
-        public bool IsRoot(string fullPath)
+        public virtual bool IsRoot(string fullPath)
         {
             return fullPath.Length == RootDirectory.Length;
         }
 
-        public string GetRelativePath(IFileSystem fileSystem)
+        public virtual string GetRelativePath(IFileSystem fileSystem)
         {
             return fileSystem.FullName.Substring(RootDirectory.Length);
         }
 
-        public string GetRelativePath(string fullPath)
+        public virtual string GetRelativePath(string fullPath)
         {
             return fullPath.Substring(RootDirectory.Length);
         }
 
-        public string GetPathUrl(string fullPath)
+        public virtual string GetPathUrl(string fullPath)
         {
             return fullPath.Length == RootDirectory.Length
                 ? Url
@@ -218,19 +218,19 @@ namespace elFinder.Net.Core
                     .Replace(DirectorySeparatorChar, WebConsts.UrlSegmentSeparator);
         }
 
-        private string GetDirectoryName(string file)
+        protected virtual string GetDirectoryName(string file)
         {
             var separatorIdx = file.LastIndexOf(DirectorySeparatorChar);
             return separatorIdx > -1 ? file.Substring(0, separatorIdx) : string.Empty;
         }
 
-        public bool Own(IFileSystem fileSystem)
+        public virtual bool Own(IFileSystem fileSystem)
         {
             return fileSystem.FullName == RootDirectory
                 || fileSystem.FullName.StartsWith($"{RootDirectory}{DirectorySeparatorChar}");
         }
 
-        public bool Own(string fullPath)
+        public virtual bool Own(string fullPath)
         {
             return fullPath == RootDirectory
                 || fullPath.StartsWith($"{RootDirectory}{DirectorySeparatorChar}");

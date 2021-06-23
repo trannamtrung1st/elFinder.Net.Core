@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="3.1.16" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="3.1.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="3.1.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\elFinder.Net.AspNetCore\elFinder.Net.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\elFinder.Net.Drivers.FileSystem\elFinder.Net.Drivers.FileSystem.csproj" />
+    <ProjectReference Include="..\..\Plugins\elFinder.Net.Plugins.FileSystemQuotaManagement\elFinder.Net.Plugins.FileSystemQuotaManagement.csproj" />
+    <ProjectReference Include="..\..\Plugins\elFinder.Net.Plugins.LoggingExample\elFinder.Net.Plugins.LoggingExample.csproj" />
+  </ItemGroup>
+
+</Project>
