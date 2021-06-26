@@ -1,16 +1,19 @@
 ﻿using Castle.DynamicProxy;
 using elFinder.Net.Core;
-using elFinder.Net.Core.Exceptions;
 using elFinder.Net.Core.Models.Command;
 using elFinder.Net.Core.Models.Response;
 using elFinder.Net.Core.Services;
 using elFinder.Net.Core.Services.Drawing;
 using elFinder.Net.Drivers.FileSystem.Factories;
+using elFinder.Net.Drivers.FileSystem.Streams;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Contexts;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Exceptions;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,6 +29,8 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
         protected readonly IFileSystemDirectoryFactory directoryFactory;
         protected readonly IFileSystemFileFactory fileFactory;
         protected readonly IStorageManager storageManager;
+
+        private readonly ISet<string> _registeredHandlers;
 
         public DriverInterceptor(PluginManager pluginManager,
             QuotaManagementContext context,
@@ -44,6 +49,8 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             this.fileFactory = fileFactory;
             this.directoryFactory = directoryFactory;
             this.storageManager = storageManager;
+
+            _registeredHandlers = new HashSet<string>();
         }
 
         public virtual void Intercept(IInvocation invocation)
@@ -58,6 +65,11 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 case nameof(IDriver.PasteAsync):
                     {
                         InterceptPaste(invocation, quotaOptions);
+                        return;
+                    }
+                case nameof(IDriver.DuplicateAsync):
+                    {
+                        InterceptDuplicate(invocation, quotaOptions);
                         return;
                     }
                 case nameof(IDriver.RmAsync):
@@ -75,71 +87,225 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         InterceptUpload(invocation, quotaOptions);
                         return;
                     }
+                case nameof(IDriver.PutAsync):
+                    {
+                        InterceptPut(invocation, quotaOptions);
+                        return;
+                    }
+                case nameof(IDriver.ResizeAsync):
+                    {
+                        InterceptResize(invocation, quotaOptions);
+                        return;
+                    }
+                case nameof(IDriver.ArchiveAsync):
+                    {
+                        InterceptArchive(invocation, quotaOptions);
+                        return;
+                    }
+                case nameof(IDriver.ExtractAsync):
+                    {
+                        InterceptExtract(invocation, quotaOptions);
+                        return;
+                    }
             }
 
             invocation.Proceed();
+        }
+
+        protected virtual void InterceptDuplicate(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            var dupCmd = invocation.Arguments[0] as DuplicateCommand;
+            var dstVolume = dupCmd.TargetPaths.Select(o => o.Volume).First();
+            InterceptCopy<DuplicateResponse>(invocation, dstVolume, quotaOptions);
         }
 
         protected virtual void InterceptPaste(IInvocation invocation, QuotaOptions quotaOptions)
         {
             var pasteCmd = invocation.Arguments[0] as PasteCommand;
 
-            if (pasteCmd.Cut != 1) throw new CommandNoSupportException();
-
-            var fromVolume = pasteCmd.TargetPaths.Select(o => o.Volume).First();
-            var dstVolume = pasteCmd.DstPath.Volume;
-            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
-
-            if (fromVolume != dstVolume && quotaOptions.Quotas.TryGetValue(dstVolume.VolumeId, out var volumeQuota))
+            if (pasteCmd.Cut == 1)
             {
-                var maximum = volumeQuota.MaxStorageSize ?? 0;
+                var driver = invocation.InvocationTarget as IDriver;
+                var fromVolume = pasteCmd.TargetPaths.Select(o => o.Volume).First();
+                var dstVolume = pasteCmd.DstPath.Volume;
                 var fromDirectory = directoryFactory.Create(fromVolume.RootDirectory, fromVolume, fileFactory);
                 var dstDirectory = directoryFactory.Create(dstVolume.RootDirectory, dstVolume, fileFactory);
-                Func<string, Task<long>> createFunc = async (_) =>
-                {
-                    var dirSizeAndCount = await dstDirectory.GetSizeAndCountAsync(visibleOnly: false, cancellationToken);
-                    return dirSizeAndCount.Size;
-                };
-                Exception exception = null;
+                var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+
+                DirectoryStorageCache fromStorageCache = null;
+                DirectoryStorageCache dstStorageCache = null;
                 bool proceeded = false;
+                double? maximum = null;
+
+                if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(dstVolume.VolumeId, out var volumeQuota))
+                    maximum = volumeQuota.MaxStorageSize;
+
+                if (!_registeredHandlers.Contains(nameof(InterceptPaste) + "cut"))
+                {
+                    _registeredHandlers.Add(nameof(InterceptPaste) + "cut");
+
+                    Func<string, Task<long>> fromCreateFunc = (_) => fromDirectory.GetPhysicalStorageUsageAsync(cancellationToken);
+                    Func<string, Task<long>> dstCreateFunc = (_) => dstDirectory.GetPhysicalStorageUsageAsync(cancellationToken);
+                    long toSize = 0, decreaseSize = 0, fromSize = 0;
+
+                    driver.OnBeforeMove += (sender, args) =>
+                    {
+                        if (args.FileSystem is IFile file)
+                        {
+                            (dstStorageCache, _) = storageManager.Lock(dstVolume.RootDirectory, dstCreateFunc);
+
+                            fromSize = file.LengthAsync.Result;
+                            toSize = fromSize;
+
+                            if (fromVolume != dstVolume)
+                                (fromStorageCache, _) = storageManager.Lock(fromVolume.RootDirectory, fromCreateFunc);
+                            else
+                            {
+                                fromStorageCache = dstStorageCache;
+                                decreaseSize = fromSize;
+                            }
+
+                            if (args.IsOverwrite == true)
+                            {
+                                var dest = new FileInfo(args.NewDest);
+                                if (dest.Exists)
+                                    toSize -= dest.Length;
+                            }
+
+                            if (dstStorageCache.Storage + toSize - decreaseSize > maximum)
+                                throw new QuotaException(maximum.Value, dstStorageCache.Storage, quotaOptions);
+
+                            proceeded = true;
+                        }
+                        else if (args.FileSystem is IDirectory directory && !args.IsOverwrite)
+                        {
+                            (dstStorageCache, _) = storageManager.Lock(dstVolume.RootDirectory, dstCreateFunc);
+
+                            fromSize = directory.GetPhysicalStorageUsageAsync(cancellationToken).Result;
+                            toSize = fromSize;
+
+                            if (fromVolume != dstVolume)
+                                (fromStorageCache, _) = storageManager.Lock(fromVolume.RootDirectory, fromCreateFunc);
+                            else
+                            {
+                                fromStorageCache = dstStorageCache;
+                                decreaseSize = fromSize;
+                            }
+
+                            if (dstStorageCache.Storage + toSize - decreaseSize > maximum)
+                                throw new QuotaException(maximum.Value, dstStorageCache.Storage, quotaOptions);
+
+                            proceeded = true;
+                        }
+                    };
+
+                    driver.OnAfterMove += (sender, args) =>
+                    {
+                        if (dstStorageCache == null) return;
+
+                        dstStorageCache.Storage += toSize;
+                        fromStorageCache.Storage -= fromSize;
+
+                        storageManager.Unlock(dstStorageCache);
+                        if (dstStorageCache != fromStorageCache)
+                            storageManager.Unlock(fromStorageCache);
+
+                        dstStorageCache = null;
+                        fromStorageCache = null;
+                    };
+                }
 
                 try
                 {
-                    storageManager.LockDirectoryStorage(dstVolume.RootDirectory, async (cache, _) =>
+                    invocation.ProceedAsyncMethod<PasteResponse>();
+                }
+                finally
+                {
+                    storageManager.Unlock(dstStorageCache);
+                    if (dstStorageCache != fromStorageCache)
+                        storageManager.Unlock(fromStorageCache);
+
+                    dstStorageCache = null;
+                    fromStorageCache = null;
+
+                    if (proceeded)
                     {
-                        var totalSize = (await Task.WhenAll(pasteCmd.TargetPaths.Select(async o =>
-                        {
-                            if (o.IsDirectory) return (await o.Directory.GetSizeAndCountAsync()).Size;
+                        storageManager.StartSizeCalculationThread(dstDirectory);
 
-                            return await o.File.LengthAsync;
-                        }))).Sum();
-
-                        if (cache.Storage + totalSize > maximum)
-                            throw new QuotaException(maximum, cache.Storage, quotaOptions);
-                        else
-                        {
-                            proceeded = true;
-                            invocation.ProceedAsyncMethod<PasteResponse>();
-                        };
-                    }, createFunc);
+                        if (fromVolume != dstVolume)
+                            storageManager.StartSizeCalculationThread(fromDirectory);
+                    }
                 }
-                catch (Exception ex)
+            }
+            else
+            {
+                var dstVolume = pasteCmd.DstPath.Volume;
+                InterceptCopy<PasteResponse>(invocation, dstVolume, quotaOptions);
+            }
+        }
+
+        protected virtual void InterceptCopy<T>(IInvocation invocation, IVolume dstVolume, QuotaOptions quotaOptions)
+        {
+            var driver = invocation.InvocationTarget as IDriver;
+            var dstDirectory = directoryFactory.Create(dstVolume.RootDirectory, dstVolume, fileFactory);
+            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+
+            DirectoryStorageCache storageCache = null;
+            bool proceeded = false;
+            double? maximum = null;
+
+            if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(dstVolume.VolumeId, out var volumeQuota))
+                maximum = volumeQuota.MaxStorageSize;
+
+            if (!_registeredHandlers.Contains(nameof(InterceptCopy)))
+            {
+                _registeredHandlers.Add(nameof(InterceptCopy));
+
+                Func<string, Task<long>> createFunc = (_) => dstDirectory.GetPhysicalStorageUsageAsync(cancellationToken);
+                long copySize = 0;
+
+                driver.OnBeforeCopy += (sender, args) =>
                 {
-                    exception = ex;
-                }
+                    if (args.FileSystem is IFile file)
+                    {
+                        (storageCache, _) = storageManager.Lock(dstVolume.RootDirectory, createFunc);
 
-                if (proceeded)
+                        copySize = file.LengthAsync.Result;
+                        if (args.IsOverwrite == true)
+                        {
+                            var dest = new FileInfo(args.Dest);
+                            if (dest.Exists)
+                                copySize -= dest.Length;
+                        }
+
+                        if (storageCache.Storage + copySize > maximum)
+                            throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                        proceeded = true;
+                    }
+                };
+
+                driver.OnAfterCopy += (sender, args) =>
                 {
-                    storageManager.StartSizeCalculationThread(fromDirectory);
-                    storageManager.StartSizeCalculationThread(dstDirectory);
-                }
-
-                if (exception != null) throw exception;
-
-                return;
+                    if (storageCache == null) return;
+                    storageCache.Storage += copySize;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
             }
 
-            invocation.Proceed();
+            try
+            {
+                invocation.ProceedAsyncMethod<T>();
+            }
+            finally
+            {
+                storageManager.Unlock(storageCache);
+                storageCache = null;
+
+                if (proceeded)
+                    storageManager.StartSizeCalculationThread(dstDirectory);
+            }
         }
 
         protected virtual void InterceptRm(IInvocation invocation, QuotaOptions quotaOptions)
@@ -147,20 +313,15 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var rmCmd = invocation.Arguments[0] as RmCommand;
             var volume = rmCmd.TargetPaths.Select(o => o.Volume).First();
             var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
-            Exception exception = null;
 
             try
             {
                 invocation.ProceedAsyncMethod<RmResponse>();
             }
-            catch (Exception ex)
+            finally
             {
-                exception = ex;
+                storageManager.StartSizeCalculationThread(volumeDir);
             }
-
-            storageManager.StartSizeCalculationThread(volumeDir);
-
-            if (exception != null) throw exception;
         }
 
         protected virtual void InterceptTmb(IInvocation invocation, QuotaOptions quotaOptions)
@@ -170,66 +331,330 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
         protected virtual void InterceptUpload(IInvocation invocation, QuotaOptions quotaOptions)
         {
-            var uploadData = invocation.Arguments[0] as UploadData;
-            var initData = invocation.Arguments[1] as InitUploadData;
-            var volume = initData.Volume;
+            var driver = invocation.InvocationTarget as IDriver;
+            var cmd = invocation.Arguments[0] as UploadCommand;
+            var volume = cmd.TargetPath.Volume;
             var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
-            Exception exception = null;
+            double? maximum = null;
 
-            if (quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
+            if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
+                maximum = volumeQuota.MaxStorageSize;
+
+            DirectoryStorageCache storageCache = null;
+            bool proceeded = false;
+
+            if (!_registeredHandlers.Contains(nameof(InterceptUpload)))
             {
-                if (!context.Features.TryGetValue(typeof(UploadContext), out var uploadContextObj))
-                    throw new InvalidOperationException("No context found");
+                _registeredHandlers.Add(nameof(InterceptUpload));
 
-                var uploadContext = uploadContextObj as UploadContext;
-                var maximum = volumeQuota.MaxStorageSize ?? 0;
-                Func<string, Task<long>> createFunc = async (_) =>
+                Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                long uploadLength = 0;
+
+                driver.OnBeforeUpload += (sender, args) =>
                 {
-                    var dirSizeAndCount = await volumeDir.GetSizeAndCountAsync(visibleOnly: false, cancellationToken);
-                    return dirSizeAndCount.Size;
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    uploadLength = args.FormFile.Length;
+                    if (args.IsOverwrite)
+                    {
+                        uploadLength -= args.File.LengthAsync.Result;
+                    }
+
+                    if (storageCache.Storage + uploadLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
                 };
 
-                storageManager.LockDirectoryStorage(volume.RootDirectory, async (cache, _) =>
+                driver.OnAfterUpload += (sender, args) =>
                 {
-                    var uploadLength = uploadData.FormFile.Length;
+                    if (storageCache == null) return;
+                    storageCache.Storage += uploadLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
 
-                    if (!uploadData.IsOverwrite)
-                    {
-                        if (cache.Storage + uploadLength > maximum)
-                            throw new QuotaException(maximum, cache.Storage, quotaOptions);
-                    }
-                    else
-                    {
-                        uploadLength -= await uploadData.Destination.LengthAsync;
-                    }
-
-                    if (cache.Storage + uploadLength > maximum)
-                        throw new QuotaException(maximum, cache.Storage, quotaOptions);
-
-                    uploadContext.ProceededDirectories.GetOrAdd(volume.VolumeId, volumeDir);
-
-                    invocation.ProceedAsyncMethod();
-
-                    cache.Storage += uploadLength;
-                }, createFunc);
-
-                return;
+                driver.OnUploadError += (sender, exception) =>
+                {
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                    if (exception is QuotaException)
+                        throw exception;
+                };
             }
 
             try
             {
-                invocation.Proceed();
+                invocation.ProceedAsyncMethod<UploadResponse>();
             }
-            catch (Exception ex)
+            finally
             {
-                exception = ex;
+                storageManager.Unlock(storageCache);
+                storageCache = null;
+
+                if (proceeded)
+                    storageManager.StartSizeCalculationThread(volumeDir);
             }
-
-            storageManager.StartSizeCalculationThread(volumeDir);
-
-            if (exception != null) throw exception;
         }
 
+        protected virtual void InterceptPut(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            InterceptWriteToTarget<PutResponse>(invocation, quotaOptions);
+        }
+
+        protected virtual void InterceptResize(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            InterceptWriteToTarget<ResizeResponse>(invocation, quotaOptions);
+        }
+
+        protected virtual void InterceptWriteToTarget<TResp>(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            var driver = invocation.InvocationTarget as IDriver;
+            var cmd = invocation.Arguments[0] as TargetCommand;
+            var volume = cmd.TargetPath.Volume;
+            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+            double? maximum = null;
+
+            if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
+                maximum = volumeQuota.MaxStorageSize;
+
+            DirectoryStorageCache storageCache = null;
+            bool proceeded = false;
+
+            if (!_registeredHandlers.Contains(nameof(InterceptWriteToTarget)))
+            {
+                _registeredHandlers.Add(nameof(InterceptWriteToTarget));
+
+                Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                long writeLength = 0;
+                long oldLength = 0;
+
+                driver.OnBeforeWriteData += (sender, args) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    writeLength = args.Data.Length;
+                    if (args.File.ExistsAsync.Result)
+                        oldLength = args.File.LengthAsync.Result;
+
+                    if (storageCache.Storage + writeLength - oldLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
+                };
+
+                driver.OnAfterWriteData += (sender, args) =>
+                {
+                    if (storageCache == null) return;
+                    args.File.RefreshAsync(cancellationToken).Wait();
+                    storageCache.Storage += args.File.LengthAsync.Result - oldLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+
+                driver.OnBeforeWriteStream += (sender, args) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    var memStream = new MemoryStream();
+                    using (memStream)
+                    {
+                        using (var stream = args.OpenStreamFunc().Result)
+                        {
+                            stream.CopyTo(memStream, StreamConstants.DefaultBufferSize);
+                            writeLength = memStream.Length;
+                        }
+                    }
+
+                    if (args.File.ExistsAsync.Result)
+                        oldLength = args.File.LengthAsync.Result;
+
+                    if (storageCache.Storage + writeLength - oldLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
+                };
+
+                driver.OnAfterWriteStream += (sender, args) =>
+                {
+                    if (storageCache == null) return;
+                    args.File.RefreshAsync(cancellationToken).Wait();
+                    storageCache.Storage += args.File.LengthAsync.Result - oldLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+
+                driver.OnBeforeWriteContent += (sender, args) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    writeLength = Encoding.GetEncoding(args.Encoding).GetByteCount(args.Content + Environment.NewLine) + 1;
+                    if (args.File.ExistsAsync.Result)
+                        oldLength = args.File.LengthAsync.Result;
+
+                    if (storageCache.Storage + writeLength - oldLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
+                };
+
+                driver.OnAfterWriteContent += (sender, args) =>
+                {
+                    if (storageCache == null) return;
+                    args.File.RefreshAsync(cancellationToken).Wait();
+                    storageCache.Storage += args.File.LengthAsync.Result - oldLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+            }
+
+            try
+            {
+                invocation.ProceedAsyncMethod<TResp>();
+            }
+            finally
+            {
+                storageManager.Unlock(storageCache);
+                storageCache = null;
+
+                if (proceeded)
+                    storageManager.StartSizeCalculationThread(volumeDir);
+            }
+        }
+
+        protected virtual void InterceptArchive(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            var driver = invocation.InvocationTarget as IDriver;
+            var cmd = invocation.Arguments[0] as ArchiveCommand;
+            var volume = cmd.TargetPath.Volume;
+            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+            double? maximum = null;
+
+            if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
+                maximum = volumeQuota.MaxStorageSize;
+
+            DirectoryStorageCache storageCache = null;
+            bool proceeded = false;
+
+            if (!_registeredHandlers.Contains(nameof(InterceptArchive)))
+            {
+                _registeredHandlers.Add(nameof(InterceptArchive));
+
+                Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                driver.OnBeforeArchive += (sender, file) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    if (storageCache.Storage > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
+                };
+
+                driver.OnAfterArchive += (sender, file) =>
+                {
+                    if (storageCache == null) return;
+                    file.RefreshAsync(cancellationToken).Wait();
+                    var archiveLength = file.LengthAsync.Result;
+
+                    if (storageCache.Storage + archiveLength > maximum)
+                    {
+                        try
+                        {
+                            file.DeleteAsync().Wait();
+                        }
+                        finally
+                        {
+                            throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+                        }
+                    }
+
+                    storageCache.Storage += archiveLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+            }
+
+            try
+            {
+                invocation.ProceedAsyncMethod<ArchiveResponse>();
+            }
+            finally
+            {
+                storageManager.Unlock(storageCache);
+                storageCache = null;
+
+                if (proceeded)
+                    storageManager.StartSizeCalculationThread(volumeDir);
+            }
+        }
+
+        protected virtual void InterceptExtract(IInvocation invocation, QuotaOptions quotaOptions)
+        {
+            var driver = invocation.InvocationTarget as IDriver;
+            var cmd = invocation.Arguments[0] as ExtractCommand;
+            var volume = cmd.TargetPath.Volume;
+            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+            double? maximum = null;
+
+            if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
+                maximum = volumeQuota.MaxStorageSize;
+
+            DirectoryStorageCache storageCache = null;
+            bool proceeded = false;
+
+            if (!_registeredHandlers.Contains(nameof(InterceptExtract)))
+            {
+                _registeredHandlers.Add(nameof(InterceptExtract));
+
+                Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                long extractLength = 0;
+
+                driver.OnBeforeExtractFile += (sender, args) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    extractLength = args.Entry.Length;
+                    if (args.IsOverwrite)
+                    {
+                        extractLength -= args.DestFile.LengthAsync.Result;
+                    }
+
+                    if (storageCache.Storage + extractLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceeded = true;
+                };
+
+                driver.OnAfterExtractFile += (sender, args) =>
+                {
+                    if (storageCache == null) return;
+                    storageCache.Storage += extractLength;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+            }
+
+            try
+            {
+                invocation.ProceedAsyncMethod<ExtractResponse>();
+            }
+            finally
+            {
+                storageManager.Unlock(storageCache);
+                storageCache = null;
+
+                if (proceeded)
+                    storageManager.StartSizeCalculationThread(volumeDir);
+            }
+        }
     }
 }

@@ -28,7 +28,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
             else
             {
                 var search = $"{name}*{extension}";
-                var sameNames = (await file.Parent.GetFilesAsync(search, visibleOnly: false, cancellationToken: cancellationToken))
+                var sameNames = (await file.Parent.GetFilesAsync(search, false, _ => true, cancellationToken: cancellationToken))
                     .Select(f => f.Name).ToArray();
 
                 var count = 1;

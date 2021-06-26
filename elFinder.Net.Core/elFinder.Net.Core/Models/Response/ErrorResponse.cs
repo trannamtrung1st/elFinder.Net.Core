@@ -35,6 +35,14 @@ namespace elFinder.Net.Core.Models.Response
                 };
             }
 
+            public static ErrorResponse CommandParams(Exception ex, string cmd)
+            {
+                return new ErrorResponse(ex)
+                {
+                    error = new[] { ErrorResponse.CommandParams, cmd }
+                };
+            }
+
             public static ErrorResponse FolderNotFound(Exception ex)
             {
                 return new ErrorResponse(ex)

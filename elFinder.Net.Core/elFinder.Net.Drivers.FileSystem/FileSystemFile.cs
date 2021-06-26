@@ -66,14 +66,14 @@ namespace elFinder.Net.Drivers.FileSystem
 
         public virtual bool ByPassObjectAttribute { get; set; }
 
-        private IDirectory _directory;
+        private IDirectory _parent;
         public virtual IDirectory Parent
         {
             get
             {
-                if (_directory == null)
-                    _directory = directoryFactory.Create(fileInfo.Directory, volume, fileFactory);
-                return _directory;
+                if (_parent == null)
+                    _parent = directoryFactory.Create(fileInfo.Directory, volume, fileFactory);
+                return _parent;
             }
         }
 
@@ -83,7 +83,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
         public virtual string Extension => fileInfo.Extension;
 
-        public virtual string FullName => fileInfo.FullName;
+        public virtual string FullName => PathHelper.NormalizePath(fileInfo.FullName);
 
         public virtual Task<DateTime> LastWriteTimeUtcAsync => Task.FromResult(fileInfo.LastWriteTimeUtc);
 
@@ -102,29 +102,30 @@ namespace elFinder.Net.Drivers.FileSystem
             }
         }
 
-        public virtual Task<Stream> OpenReadAsync(CancellationToken cancellationToken = default)
+        public virtual Task<Stream> OpenReadAsync(bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) throw new PermissionDeniedException();
+            if (verify && !ObjectAttribute.Read) throw new PermissionDeniedException();
 
             GCHelper.WaitForCollect();
             return Task.FromResult<Stream>(fileInfo.OpenRead());
         }
 
-        public virtual async Task RefreshAsync(CancellationToken cancellationToken = default)
+        public virtual Task RefreshAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             fileInfo.Refresh();
-            if (_directory != null) await _directory.RefreshAsync(cancellationToken);
+
+            return Task.CompletedTask;
         }
 
-        public virtual async Task OverwriteAsync(Stream stream, CancellationToken cancellationToken = default)
+        public virtual async Task OverwriteAsync(Stream stream, bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!await this.CanWriteAsync())
+            if (verify && !await this.CanWriteAsync())
                 throw new PermissionDeniedException();
 
             if (this.DirectoryExists())
@@ -137,11 +138,11 @@ namespace elFinder.Net.Drivers.FileSystem
             }
         }
 
-        public virtual async Task<Stream> OpenWriteAsync(FileMode fileMode = FileMode.Create, CancellationToken cancellationToken = default)
+        public virtual async Task<Stream> OpenWriteAsync(bool verify = true, FileMode fileMode = FileMode.Create, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!await this.CanWriteAsync())
+            if (verify && !await this.CanWriteAsync())
                 throw new PermissionDeniedException();
 
             if (this.DirectoryExists())
@@ -151,69 +152,70 @@ namespace elFinder.Net.Drivers.FileSystem
             return File.Open(fileInfo.FullName, fileMode);
         }
 
-        public virtual Task<Stream> CreateAsync(CancellationToken cancellationToken = default)
+        public virtual Task CreateAsync(bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanCreate()) throw new PermissionDeniedException();
+            if (verify && !this.CanCreate()) throw new PermissionDeniedException();
 
             GCHelper.WaitForCollect();
 
-            Stream stream;
-            using (stream = fileInfo.Create()) { }
+            using (var stream = fileInfo.Create()) { }
 
             fileInfo.Refresh();
 
-            return Task.FromResult(stream);
+            return Task.CompletedTask;
         }
 
-        public virtual async Task<ImageWithMimeType> CreateThumbAsync(string originalPath, int tmbSize, IPictureEditor pictureEditor, CancellationToken cancellationToken = default)
+        public virtual async Task<ImageWithMimeType> CreateThumbAsync(string originalPath, int tmbSize, IPictureEditor pictureEditor,
+            bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (!await Parent.ExistsAsync)
-                await Parent.CreateAsync(cancellationToken);
+                await Parent.CreateAsync(verify, cancellationToken: cancellationToken);
 
             using (var original = File.OpenRead(originalPath))
             {
                 var thumb = pictureEditor.GenerateThumbnail(original, tmbSize, true);
-                await OverwriteAsync(thumb.ImageStream, cancellationToken);
+                await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
                 return thumb;
             }
         }
 
-        public virtual Task DeleteAsync(CancellationToken cancellationToken = default)
+        public virtual Task DeleteAsync(bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanDelete()) throw new PermissionDeniedException();
+            if (verify && !this.CanDelete()) throw new PermissionDeniedException();
 
             fileInfo.Delete();
             return Task.CompletedTask;
         }
 
-        public virtual Task<IFile> RenameAsync(string newName, CancellationToken cancellationToken = default)
+        public virtual Task<IFile> RenameAsync(string newName, bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanRename()) throw new PermissionDeniedException();
+            if (verify && !this.CanRename()) throw new PermissionDeniedException();
 
             var newPath = PathHelper.GetFullPath(Parent.FullName, newName);
             fileInfo.MoveTo(newPath);
             return Task.FromResult<IFile>(fileFactory.Create(newPath, volume, directoryFactory));
         }
 
-        public virtual async Task<IFile> CopyToAsync(string newDest, bool copyOverwrite, CancellationToken cancellationToken = default)
+        public virtual async Task<IFile> CopyToAsync(string newDest, bool copyOverwrite,
+            bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanCopy()) throw new PermissionDeniedException();
+            if (verify && !this.CanCopy()) throw new PermissionDeniedException();
 
-            var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destDriver == null) throw new PermissionDeniedException();
+            var destVolume = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
+            if (destVolume == null) throw new PermissionDeniedException();
 
-            var destInfo = fileFactory.Create(newDest, destDriver, directoryFactory);
-            if (!await destInfo.CanCopyToAsync())
+            var destInfo = fileFactory.Create(newDest, destVolume, directoryFactory);
+            if (verify && !await destInfo.CanCopyToAsync())
                 throw new PermissionDeniedException();
 
             if (destInfo.DirectoryExists())
@@ -221,20 +223,20 @@ namespace elFinder.Net.Drivers.FileSystem
 
             var info = fileInfo.CopyTo(newDest, copyOverwrite);
 
-            return fileFactory.Create(info, destDriver, directoryFactory);
+            return fileFactory.Create(info, destVolume, directoryFactory);
         }
 
-        public virtual async Task<IFile> MoveToAsync(string newDest, CancellationToken cancellationToken = default)
+        public virtual async Task<IFile> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanMove()) throw new PermissionDeniedException();
+            if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
-            var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destDriver == null) throw new PermissionDeniedException();
+            var destVolume = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
+            if (destVolume == null) throw new PermissionDeniedException();
 
-            var destInfo = fileFactory.Create(newDest, destDriver, directoryFactory);
-            if (!await destInfo.CanMoveToAsync())
+            var destInfo = fileFactory.Create(newDest, destVolume, directoryFactory);
+            if (verify && !await destInfo.CanMoveToAsync())
                 throw new PermissionDeniedException();
 
             if (destInfo.DirectoryExists())
@@ -242,58 +244,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             fileInfo.MoveTo(newDest);
 
-            return fileFactory.Create(newDest, destDriver, directoryFactory);
-        }
-
-        public virtual async Task<IFile> SafeCopyToAsync(string newDir, bool copyOverwrite = true, string suffix = null,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!this.CanCopy()) throw new PermissionDeniedException();
-
-            string newPath = Path.Combine(newDir, Name);
-            var newFile = fileFactory.Create(newPath, volume, directoryFactory);
-
-            if (File.Exists(newPath))
-            {
-                if (!copyOverwrite)
-                {
-                    var newName = await newFile.GetCopyNameAsync(suffix, cancellationToken);
-                    newPath = Path.Combine(newDir, newName);
-                }
-            }
-
-            return await CopyToAsync(newPath, copyOverwrite, cancellationToken);
-        }
-
-        public virtual async Task<IFile> SafeMoveToAsync(string newDir, bool copyOverwrite = true, string suffix = null,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!this.CanMove()) throw new PermissionDeniedException();
-
-            string newPath = Path.Combine(newDir, Name);
-            var newFile = fileFactory.Create(newPath, volume, directoryFactory);
-
-            if (await newFile.ExistsAsync)
-            {
-                if (!copyOverwrite)
-                {
-                    var newName = await newFile.GetCopyNameAsync(suffix, cancellationToken);
-                    newPath = Path.Combine(newDir, newName);
-                }
-                else
-                {
-                    await CopyToAsync(newPath, true, cancellationToken);
-                    await DeleteAsync(cancellationToken);
-                    await newFile.RefreshAsync(cancellationToken);
-                    return newFile;
-                }
-            }
-
-            return await MoveToAsync(newPath, cancellationToken);
+            return fileFactory.Create(newDest, destVolume, directoryFactory);
         }
 
         public virtual Task<bool> IsChildOfAsync(string fullPath)

@@ -161,7 +161,7 @@ namespace elFinder.Net.Core
                             var volume = archiveCmd.TargetPath.Volume;
 
                             if (archiveCmd.Targets.Count == 0 || archiveCmd.TargetPath?.IsDirectory != true)
-                                throw new CommandNoSupportException();
+                                throw new CommandParamsException(ConnectorCommand.Cmd_Archive);
 
                             var distinctVolumes = archiveCmd.TargetPaths.Select(p => p.Volume).Distinct().ToArray();
                             if (distinctVolumes.Length != 1 || distinctVolumes[0].VolumeId != volume.VolumeId)
@@ -511,14 +511,7 @@ namespace elFinder.Net.Core
                             if (uploadCmd.UploadPathInfos.Any(path => path.Volume != volume))
                                 throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
 
-                            var initUploadData = await volume.Driver.InitUploadAsync(uploadCmd, cancellationToken);
-                            var uploadResp = initUploadData.Response;
-
-                            foreach (var data in initUploadData.Data)
-                            {
-                                await volume.Driver.UploadAsync(data, initUploadData, cancellationToken);
-                            }
-
+                            var uploadResp = await volume.Driver.UploadAsync(uploadCmd, cancellationToken);
                             return ConnectorResult.Success(uploadResp);
                         }
                     case ConnectorCommand.Cmd_Zipdl:
@@ -577,6 +570,10 @@ namespace elFinder.Net.Core
                 else if (rootCause is DirectoryNotFoundException dnfEx)
                 {
                     errResp = ErrorResponse.Factory.FolderNotFound(dnfEx);
+                }
+                else if (rootCause is ArgumentException argEx)
+                {
+                    errResp = ErrorResponse.Factory.CommandParams(argEx, cmd.Cmd);
                 }
                 else
                 {
@@ -650,19 +647,19 @@ namespace elFinder.Net.Core
                         if (!await thumbFile.ExistsAsync)
                         {
                             var thumb = await thumbFile.CreateThumbAsync(
-                                fullPath, pathInfo.Volume.ThumbnailSize, pictureEditor, cancellationToken);
+                                fullPath, pathInfo.Volume.ThumbnailSize, pictureEditor, cancellationToken: cancellationToken);
                             thumb.ImageStream.Position = 0;
                             return thumb;
                         }
                         else
                         {
                             string mimeType = MimeHelper.GetMimeType(pictureEditor.ConvertThumbnailExtension(thumbFile.Extension));
-                            return new ImageWithMimeType(mimeType, await thumbFile.OpenReadAsync(cancellationToken));
+                            return new ImageWithMimeType(mimeType, await thumbFile.OpenReadAsync(cancellationToken: cancellationToken));
                         }
                     }
                     else
                     {
-                        using (var original = await pathInfo.File.OpenReadAsync(cancellationToken))
+                        using (var original = await pathInfo.File.OpenReadAsync(cancellationToken: cancellationToken))
                         {
                             return pictureEditor.GenerateThumbnail(original, pathInfo.Volume.ThumbnailSize, true);
                         }

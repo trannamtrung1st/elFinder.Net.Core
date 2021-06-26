@@ -78,11 +78,11 @@ namespace elFinder.Net.Core
             }
 
             DirectorySeparatorChar = directorySeparatorChar == default ? Path.DirectorySeparatorChar : directorySeparatorChar;
-            ThumbnailDirectory = $"{rootDirectory}{DirectorySeparatorChar}.tmb";
+            ThumbnailDirectory = $"{Path.GetTempPath()}{DirectorySeparatorChar}.{nameof(elFinder)}tmb";
             IsLocked = false;
             Name = Path.GetFileNameWithoutExtension(rootDirectory);
             UploadOverwrite = true;
-            CopyOverwrite = false;
+            CopyOverwrite = true;
             ThumbnailSize = 48;
         }
 

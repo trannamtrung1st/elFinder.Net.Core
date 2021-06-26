@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace elFinder.Net.Plugins.FileSystemQuotaManagement
 {
-    public class DirectoryStorageCache
+    public class DirectoryStorageCache : SemaphoreSlim
     {
-        public DirectoryStorageCache()
+        public DirectoryStorageCache() : base(1, 1)
         {
             LastAccessTime = DateTimeOffset.UtcNow;
         }
@@ -23,6 +23,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
                 LastAccessTime = DateTimeOffset.UtcNow;
             }
         }
+
         public DateTimeOffset? LastAccessTime { get; set; }
     }
 
@@ -30,7 +31,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
     {
         (long Storage, bool IsInit) GetOrCreateDirectoryStorage(string dir, Func<string, Task<long>> createFunc);
         bool RemoveDirectoryStorage(string dir);
-        void LockDirectoryStorage(string dir, Func<DirectoryStorageCache, bool, Task> updateFunc, Func<string, Task<long>> createFunc);
+        Task Lock(string dir, Func<DirectoryStorageCache, bool, Task> updateFunc, Func<string, Task<long>> createFunc);
+        (DirectoryStorageCache StorageCache, bool IsInit) Lock(string dir, Func<string, Task<long>> createFunc);
+        void Unlock(DirectoryStorageCache storageCache);
     }
 
     public class StorageManager : IStorageManager
@@ -54,7 +57,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
             return (result.StorageObj.Storage, result.isInit);
         }
 
-        public void LockDirectoryStorage(string dir, Func<DirectoryStorageCache, bool, Task> updateFunc, Func<string, Task<long>> createFunc)
+        public async Task Lock(string dir, Func<DirectoryStorageCache, bool, Task> updateFunc, Func<string, Task<long>> createFunc)
         {
             while (true)
             {
@@ -63,13 +66,48 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
 
                 CheckAndClearCaches();
 
-                lock (storageObj)
+                try
                 {
+                    storageObj.Wait();
+
                     if (storageObj.LastAccessTime == null) continue;
-                    updateFunc(storageObj, result.isInit).Wait();
+
+                    await updateFunc(storageObj, result.isInit);
+
                     return;
                 }
+                finally
+                {
+                    if (storageObj?.CurrentCount == 0)
+                        storageObj.Release();
+                }
             }
+        }
+
+        public (DirectoryStorageCache StorageCache, bool IsInit) Lock(string dir, Func<string, Task<long>> createFunc)
+        {
+            while (true)
+            {
+                var result = GetOrCreate(dir, createFunc);
+                var storageObj = result.StorageObj;
+
+                CheckAndClearCaches();
+
+                storageObj.Wait();
+                if (storageObj.LastAccessTime == null)
+                {
+                    storageObj.Release();
+                    continue;
+                }
+
+                return (storageObj, result.isInit);
+            }
+        }
+
+        public void Unlock(DirectoryStorageCache storageCache)
+        {
+            if (storageCache?.CurrentCount == 0)
+                storageCache.Release();
         }
 
         public bool RemoveDirectoryStorage(string dir)

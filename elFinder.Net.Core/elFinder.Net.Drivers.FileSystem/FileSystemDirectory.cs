@@ -69,7 +69,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
         public virtual Task<bool> ExistsAsync => Task.FromResult(directoryInfo.Exists);
 
-        public virtual string FullName => directoryInfo.FullName;
+        public virtual string FullName => PathHelper.NormalizePath(directoryInfo.FullName);
 
         public virtual Task<DateTime> LastWriteTimeUtcAsync => Task.FromResult(directoryInfo.LastWriteTimeUtc);
 
@@ -96,97 +96,108 @@ namespace elFinder.Net.Drivers.FileSystem
             return Task.FromResult(fullPath.StartsWith(FullName + volume.DirectorySeparatorChar));
         }
 
-        public virtual Task CreateAsync(CancellationToken cancellationToken = default)
+        public virtual Task CreateAsync(bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanCreate()) throw new PermissionDeniedException();
+            if (verify && !this.CanCreate()) throw new PermissionDeniedException();
 
             directoryInfo.Create();
             directoryInfo.Refresh();
             return Task.CompletedTask;
         }
 
-        public virtual async Task DeleteAsync(CancellationToken cancellationToken = default)
+        public virtual async Task DeleteAsync(bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanDelete()) throw new PermissionDeniedException();
+            if (verify && !this.CanDelete()) throw new PermissionDeniedException();
 
-            foreach (var file in await GetFilesAsync(false, cancellationToken))
-                await file.DeleteAsync(cancellationToken);
+            foreach (var file in await GetFilesAsync(verify: false, _ => true, cancellationToken: cancellationToken))
+                await file.DeleteAsync(verify, cancellationToken);
 
-            foreach (var dir in await GetDirectoriesAsync(false, cancellationToken))
-                await dir.DeleteAsync(cancellationToken);
+            foreach (var dir in await GetDirectoriesAsync(verify: false, _ => true, cancellationToken: cancellationToken))
+                await dir.DeleteAsync(verify, cancellationToken);
 
             directoryInfo.Delete(true);
         }
 
-        public virtual async Task RefreshAsync(CancellationToken cancellationToken = default)
+        public virtual Task RefreshAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             directoryInfo.Refresh();
-            if (_parent != null) await _parent.RefreshAsync(cancellationToken);
+
+            return Task.CompletedTask;
         }
 
-        public virtual async Task<bool> HasAnySubDirectoryAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
+        public virtual async Task<bool> HasAnySubDirectoryAsync(bool verify = true,
+            Func<IDirectory, bool> filter = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return false;
+            if (verify && !ObjectAttribute.Read) return false;
 
-            return (await GetDirectoriesAsync(visibleOnly, cancellationToken)).Any();
+            return (await GetDirectoriesAsync(verify, filter, cancellationToken)).Any();
         }
 
-        public virtual Task<IEnumerable<IDirectory>> GetDirectoriesAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IDirectory>> GetDirectoriesAsync(bool verify = true,
+            Func<IDirectory, bool> filter = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
+            if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
 
             var dirs = directoryInfo.EnumerateDirectories().Select(dir => directoryFactory.Create(dir, volume, fileFactory) as IDirectory);
 
-            if (visibleOnly) dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
+            if (filter != null) dirs = dirs.Where(filter);
+            else dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
 
             return Task.FromResult(dirs);
         }
 
-        public virtual Task<IEnumerable<IDirectory>> GetDirectoriesAsync(string search, bool visibleOnly = true, SearchOption searchOption = default, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IDirectory>> GetDirectoriesAsync(string search, bool verfify = true,
+            Func<IDirectory, bool> filter = null, SearchOption searchOption = default, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
+            if (verfify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
 
-            var dirs = directoryInfo.EnumerateDirectories(search, searchOption).Select(dir => directoryFactory.Create(dir, volume, fileFactory) as IDirectory);
+            var dirs = directoryInfo.EnumerateDirectories(search, searchOption)
+                .Select(dir => directoryFactory.Create(dir, volume, fileFactory) as IDirectory);
 
-            if (visibleOnly) dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
+            if (filter != null) dirs = dirs.Where(filter);
+            else dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
 
             return Task.FromResult(dirs);
         }
 
-        public virtual Task<IEnumerable<IFile>> GetFilesAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IFile>> GetFilesAsync(bool verify = true,
+            Func<IFile, bool> filter = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+            if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
             var files = directoryInfo.EnumerateFiles().Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
 
-            if (visibleOnly) files = files.Where(file => file.ObjectAttribute.Visible);
+            if (filter != null) files = files.Where(filter);
+            else files = files.Where(file => file.ObjectAttribute.Visible);
 
             return Task.FromResult(files);
         }
 
-        public virtual Task<IEnumerable<IFile>> GetFilesAsync(IEnumerable<string> mimeTypes, bool visibleOnly = true, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IFile>> GetFilesAsync(IEnumerable<string> mimeTypes, bool verify = true,
+            Func<IFile, bool> filter = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+            if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
             var files = directoryInfo.EnumerateFiles().Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
 
-            if (visibleOnly) files = files.Where(file => file.ObjectAttribute.Visible);
+            if (filter != null) files = files.Where(filter);
+            else files = files.Where(file => file.ObjectAttribute.Visible);
 
             if (mimeTypes?.Any() == true)
             {
@@ -196,29 +207,32 @@ namespace elFinder.Net.Drivers.FileSystem
             return Task.FromResult(files);
         }
 
-        public virtual Task<IEnumerable<IFile>> GetFilesAsync(string search, bool visibleOnly = true, SearchOption searchOption = default, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IFile>> GetFilesAsync(string search, bool verify = true,
+            Func<IFile, bool> filter = null, SearchOption searchOption = default, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+            if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
             var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
 
-            if (visibleOnly) files = files.Where(file => file.ObjectAttribute.Visible);
+            if (filter != null) files = files.Where(filter);
+            else files = files.Where(file => file.ObjectAttribute.Visible);
 
             return Task.FromResult(files);
         }
 
-        public virtual Task<IEnumerable<IFile>> GetFilesAsync(string search, IEnumerable<string> mimeTypes,
-            bool visibleOnly = true, SearchOption searchOption = SearchOption.TopDirectoryOnly, CancellationToken cancellationToken = default)
+        public virtual Task<IEnumerable<IFile>> GetFilesAsync(string search, IEnumerable<string> mimeTypes, bool verify = true,
+            Func<IFile, bool> filter = null, SearchOption searchOption = SearchOption.TopDirectoryOnly, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+            if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
             var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
 
-            if (visibleOnly) files = files.Where(file => file.ObjectAttribute.Visible);
+            if (filter != null) files = files.Where(filter);
+            else files = files.Where(file => file.ObjectAttribute.Visible);
 
             if (mimeTypes?.Any() == true)
             {
@@ -228,28 +242,28 @@ namespace elFinder.Net.Drivers.FileSystem
             return Task.FromResult(files);
         }
 
-        public virtual Task<IDirectory> RenameAsync(string newName, CancellationToken cancellationToken = default)
+        public virtual Task<IDirectory> RenameAsync(string newName, bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanRename()) throw new PermissionDeniedException();
+            if (verify && !this.CanRename()) throw new PermissionDeniedException();
 
             var newPath = PathHelper.GetFullPath(Parent.FullName, newName);
             directoryInfo.MoveTo(newPath);
             return Task.FromResult<IDirectory>(directoryFactory.Create(newPath, volume, fileFactory));
         }
 
-        public virtual async Task<IDirectory> MoveToAsync(string newDest, CancellationToken cancellationToken = default)
+        public virtual async Task<IDirectory> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!this.CanMove()) throw new PermissionDeniedException();
+            if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
             var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
             if (destDriver == null) throw new PermissionDeniedException();
 
             var destInfo = directoryFactory.Create(newDest, destDriver, fileFactory);
-            if (!await destInfo.CanMoveToAsync())
+            if (verify && !await destInfo.CanMoveToAsync())
                 throw new PermissionDeniedException();
 
             if (destInfo.FileExists())
@@ -260,46 +274,8 @@ namespace elFinder.Net.Drivers.FileSystem
             return directoryFactory.Create(newDest, volume, fileFactory);
         }
 
-        public virtual async Task MergeAsync(string newDest, bool copyOverwrite, string suffix = null, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destDriver == null) throw new PermissionDeniedException();
-
-            var destInfo = directoryFactory.Create(newDest, destDriver, fileFactory);
-            if (!await destInfo.CanMoveToAsync())
-                throw new PermissionDeniedException();
-
-            if (destInfo.FileExists())
-                throw new ExistsException(destInfo.Name);
-
-            var queue = new Queue<(IDirectory Dir, IDirectory Dest)>();
-            queue.Enqueue((this, destInfo));
-
-            while (queue.Count > 0)
-            {
-                var currentItem = queue.Dequeue();
-                var currentDir = currentItem.Dir;
-                var currentNewDest = currentItem.Dest;
-
-                if (!await currentNewDest.ExistsAsync)
-                    await currentNewDest.CreateAsync(cancellationToken);
-
-                foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
-                {
-                    var newDir = directoryFactory.Create(Path.Combine(currentNewDest.FullName, dir.Name), volume, fileFactory);
-                    queue.Enqueue((dir, newDir));
-                }
-
-                foreach (var file in await currentDir.GetFilesAsync(cancellationToken: cancellationToken))
-                {
-                    await file.SafeMoveToAsync(currentNewDest.FullName, copyOverwrite, suffix, cancellationToken);
-                }
-            }
-        }
-
-        public virtual async Task<DirectorySizeAndCount> GetSizeAndCountAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
+        public virtual async Task<DirectorySizeAndCount> GetSizeAndCountAsync(bool verify = true, Func<IDirectory, bool> dirFilter = null,
+            Func<IFile, bool> fileFilter = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -316,10 +292,10 @@ namespace elFinder.Net.Drivers.FileSystem
                 var currentDir = queue.Dequeue();
                 model.DirectoryCount++;
 
-                foreach (var dir in (await currentDir.GetDirectoriesAsync(visibleOnly, cancellationToken)))
+                foreach (var dir in (await currentDir.GetDirectoriesAsync(verify, dirFilter, cancellationToken: cancellationToken)))
                     queue.Enqueue(dir);
 
-                foreach (var file in (await currentDir.GetFilesAsync(visibleOnly, cancellationToken)))
+                foreach (var file in (await currentDir.GetFilesAsync(verify, fileFilter, cancellationToken: cancellationToken)))
                 {
                     model.FileCount++;
                     model.Size += await file.LengthAsync;
@@ -327,50 +303,6 @@ namespace elFinder.Net.Drivers.FileSystem
             }
 
             return model;
-        }
-
-        public virtual async Task<IDirectory> CopyToAsync(string newDest, bool copyOverwrite, string suffix = null, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!this.CanCopy()) throw new PermissionDeniedException();
-
-            var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destDriver == null) throw new PermissionDeniedException();
-
-            var destInfo = directoryFactory.Create(newDest, destDriver, fileFactory);
-            if (!await destInfo.CanCopyToAsync())
-                throw new PermissionDeniedException();
-
-            if (destInfo.FileExists())
-                throw new ExistsException(destInfo.Name);
-
-            var queue = new Queue<(IDirectory Dir, IDirectory Dest)>();
-            queue.Enqueue((this, destInfo));
-
-            while (queue.Count > 0)
-            {
-                var currentItem = queue.Dequeue();
-                var currentDir = currentItem.Dir;
-                var currentNewDest = currentItem.Dest;
-
-                if (!await currentNewDest.ExistsAsync)
-                    await currentNewDest.CreateAsync(cancellationToken);
-
-                foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
-                {
-                    var newDir = directoryFactory.Create(Path.Combine(currentNewDest.FullName, dir.Name), volume, fileFactory);
-                    queue.Enqueue((dir, newDir));
-                }
-
-                foreach (var file in await currentDir.GetFilesAsync(cancellationToken: cancellationToken))
-                {
-                    await file.SafeCopyToAsync(currentNewDest.FullName, copyOverwrite, suffix, cancellationToken);
-                }
-            }
-
-            await destInfo.RefreshAsync(cancellationToken);
-            return destInfo;
         }
 
         public virtual Task<bool> IsChildOfAsync(string fullPath)
