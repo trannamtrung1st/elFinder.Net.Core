@@ -26,24 +26,11 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions
                     options.PollingIntervalInMinutes = StorageManagerOptions.DefaultPollingIntervalInMinutes;
                 };
 
-            services.AddScoped<ConnectorInterceptor>()
-                .AddScoped<DriverInterceptor>()
+            services.AddScoped<DriverInterceptor>()
                 .AddScoped<ConnectorOptionsInterceptor>()
                 .AddSingleton<IStorageManager, StorageManager>()
                 .AddScoped<QuotaManagementContext>()
                 .Configure(storageManagerOptionsConfig);
-
-            collection.Captures.Add(new PluginCapture
-            {
-                ImplType = connectorImplType ?? typeof(Connector),
-                Type = typeof(IConnector),
-                CaptureFunc = (provider, connector) =>
-                {
-                    var interceptor = provider.GetRequiredService<ConnectorInterceptor>();
-                    var proxy = new ProxyGenerator().CreateInterfaceProxyWithTarget(connector as IConnector, interceptor);
-                    return proxy;
-                }
-            });
 
             collection.Captures.Add(new PluginCapture
             {

@@ -34,8 +34,12 @@ namespace elFinder.Net.Core
 
     public interface IFileSystem<Type> : IFileSystem
     {
-        Task<Type> RenameAsync(string newName, CancellationToken cancellationToken = default);
+        Task<Type> RenameAsync(string newName, bool verify = true, CancellationToken cancellationToken = default);
 
-        Task<Type> MoveToAsync(string newDest, CancellationToken cancellationToken = default);
+        Task<Type> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default);
+
+        Task CreateAsync(bool verify = true, CancellationToken cancellationToken = default);
+
+        Task DeleteAsync(bool verify = true, CancellationToken cancellationToken = default);
     }
 }

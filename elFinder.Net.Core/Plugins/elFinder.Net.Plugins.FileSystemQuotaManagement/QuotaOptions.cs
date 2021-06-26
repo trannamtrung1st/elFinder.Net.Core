@@ -7,24 +7,10 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
 {
     public class QuotaOptions
     {
-        public static readonly IEnumerable<string> NotSupportedConnectorCommands = new[]
-        {
-            ConnectorCommand.Cmd_Archive,
-            ConnectorCommand.Cmd_Duplicate,
-            ConnectorCommand.Cmd_Extract,
-            ConnectorCommand.Cmd_Put,
-            ConnectorCommand.Cmd_Resize
-        };
+        public static readonly IEnumerable<string> NotSupportedConnectorCommands = new string[0];
 
         public static readonly IEnumerable<string> NotSupportedUICommands = new[]
         {
-            ConnectorCommand.Ui_archive,
-            ConnectorCommand.Ui_duplicate,
-            ConnectorCommand.Ui_edit,
-            ConnectorCommand.Ui_editor,
-            ConnectorCommand.Ui_extract,
-            ConnectorCommand.Ui_resize,
-            ConnectorCommand.Ui_copy,
             ConnectorCommand.Ui_restore
         };
 

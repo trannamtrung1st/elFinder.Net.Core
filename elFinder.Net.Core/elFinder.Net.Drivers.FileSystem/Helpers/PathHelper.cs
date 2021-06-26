@@ -15,5 +15,10 @@ namespace elFinder.Net.Drivers.FileSystem.Helpers
             var fullPath = Path.GetFullPath(Path.Combine(paths)).TrimEnd(Path.DirectorySeparatorChar);
             return fullPath;
         }
+
+        public static string NormalizePath(string fullPath)
+        {
+            return fullPath.TrimEnd(Path.DirectorySeparatorChar);
+        }
     }
 }

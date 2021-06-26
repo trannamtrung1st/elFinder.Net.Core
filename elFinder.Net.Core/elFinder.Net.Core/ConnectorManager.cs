@@ -80,7 +80,6 @@ namespace elFinder.Net.Core
             directoryLockStatuses.GetOrAdd(dir, 0);
             directoryLockStatuses[dir]++;
             var volumeLock = directoryLocks.GetOrAdd(dir, (key) => new object());
-            Exception finalEx = null;
 
             lock (volumeLock)
             {
@@ -90,18 +89,14 @@ namespace elFinder.Net.Core
                 {
                     action().Wait();
                 }
-                catch (Exception ex)
+                finally
                 {
-                    finalEx = ex;
+                    if (directoryLockStatuses[dir] == 0)
+                    {
+                        directoryLockStatuses.TryRemove(dir, out _);
+                        directoryLocks.TryRemove(dir, out _);
+                    }
                 }
-
-                if (directoryLockStatuses[dir] == 0)
-                {
-                    directoryLockStatuses.TryRemove(dir, out _);
-                    directoryLocks.TryRemove(dir, out _);
-                }
-
-                if (finalEx != null) throw finalEx;
             }
         }
         #endregion

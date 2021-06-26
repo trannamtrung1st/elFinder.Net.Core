@@ -1,5 +1,9 @@
-﻿using elFinder.Net.Core.Models.Command;
+﻿using elFinder.Net.Core.Http;
+using elFinder.Net.Core.Models.Command;
+using elFinder.Net.Core.Models.FileInfo;
 using elFinder.Net.Core.Models.Response;
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,6 +11,37 @@ namespace elFinder.Net.Core
 {
     public interface IDriver
     {
+        #region Events
+        event EventHandler<IDirectory> OnBeforeMakeDir;
+        event EventHandler<IDirectory> OnAfterMakeDir;
+        event EventHandler<IFile> OnBeforeMakeFile;
+        event EventHandler<IFile> OnAfterMakeFile;
+        event EventHandler<(IFileSystem FileSystem, string RenameTo)> OnBeforeRename;
+        event EventHandler<(IFileSystem FileSystem, string PrevName)> OnAfterRename;
+        event EventHandler<IFileSystem> OnBeforeRemove;
+        event EventHandler<IFileSystem> OnAfterRemove;
+        event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnBeforeUpload;
+        event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnAfterUpload;
+        event EventHandler<Exception> OnUploadError;
+        event EventHandler<(IFileSystem FileSystem, string NewDest, bool IsOverwrite)> OnBeforeMove;
+        event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterMove;
+        event EventHandler<(IFileSystem FileSystem, string Dest, bool IsOverwrite)> OnBeforeCopy;
+        event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterCopy;
+        event EventHandler<IFile> OnBeforeArchive;
+        event EventHandler<IFile> OnAfterArchive;
+        event EventHandler<(Exception Exception, IFile File)> OnArchiveError;
+        event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnBeforeExtract;
+        event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnAfterExtract;
+        event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnBeforeExtractFile;
+        event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnAfterExtractFile;
+        event EventHandler<(byte[] Data, IFile File)> OnBeforeWriteData;
+        event EventHandler<(byte[] Data, IFile File)> OnAfterWriteData;
+        event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnBeforeWriteStream;
+        event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnAfterWriteStream;
+        event EventHandler<(string Content, string Encoding, IFile File)> OnBeforeWriteContent;
+        event EventHandler<(string Content, string Encoding, IFile File)> OnAfterWriteContent;
+        #endregion
+
         void AddVolume(IVolume volume);
         Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default);
         Task<IVolume> FindOwnVolumeAsync(string fullPath, CancellationToken cancellationToken = default);
@@ -30,8 +65,7 @@ namespace elFinder.Net.Core
         Task<RenameResponse> RenameAsync(RenameCommand cmd, CancellationToken cancellationToken = default);
         Task<TreeResponse> TreeAsync(TreeCommand cmd, CancellationToken cancellationToken = default);
         Task<SearchResponse> SearchAsync(SearchCommand cmd, CancellationToken cancellationToken = default);
-        Task<InitUploadData> InitUploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
-        Task UploadAsync(UploadData uploadData, InitUploadData initData, CancellationToken cancellationToken = default);
+        Task<UploadResponse> UploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
         Task<ResizeResponse> ResizeAsync(ResizeCommand cmd, CancellationToken cancellationToken = default);
         Task<Zipdl1stResponse> ZipdlAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
         Task<FileResponse> ZipdlRawAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);

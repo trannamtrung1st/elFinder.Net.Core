@@ -10,22 +10,22 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions
         {
             try
             {
-                Task.Run(() =>
+                Task.Run(async () =>
                 {
                     try
                     {
-                        storageManager.LockDirectoryStorage(directory.FullName, async (cache, isInit) =>
+                        await storageManager.Lock(directory.FullName, async (cache, isInit) =>
                         {
                             if (isInit) return;
 
                             await directory.RefreshAsync();
-                            var currentSize = (await directory.GetSizeAndCountAsync()).Size;
+                            var currentSize = await directory.GetPhysicalStorageUsageAsync();
                             cache.Storage = currentSize;
 
                         }, async (dirFullName) =>
                         {
                             await directory.RefreshAsync();
-                            var currentSize = (await directory.GetSizeAndCountAsync()).Size;
+                            var currentSize = await directory.GetPhysicalStorageUsageAsync();
                             return currentSize;
                         });
                     }
