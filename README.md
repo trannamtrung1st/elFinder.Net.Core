@@ -9,6 +9,7 @@
 The [advanced demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Demos/elFinder.Net.AdvancedDemo) has some additional use cases enabled, including:
 - Integrate Authentication/Authorization (Cookies, OAuth2 JWT).
 - Multi-tenant support.
+- Events
 - Integrate [Quota management plugin](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Plugins/elFinder.Net.Plugins.FileSystemQuotaManagement).
 - For an example of how to write a plugin, see [Logging plugin example](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Plugins/elFinder.Net.Plugins.LoggingExample). 
 This plugin intercepts all method calls of `IConnector` and `IDriver` instances then logs the method's information (arguments, method name, return value, .etc) to the console output.
@@ -40,7 +41,7 @@ For those who may get confused about which package to use, try and find the one 
 I create this with some modification that suits my use cases and the repository is **currently active**. Some of the main differences are:
 - Enable better security, ACL (for both Frontend and Backend) 
 - Support .NET Standard 2.0 (remove ASP.NET Core dependency).
-- Customizable through models and interfaces
+- Customizable through models, interfaces, and events.
 - More features and extensibility: plugins, interceptors, etc.
 - Support more commands.
 - Follow the specification from https://github.com/Studio-42/elFinder/wiki more strictly.
