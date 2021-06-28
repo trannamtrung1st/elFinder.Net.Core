@@ -153,9 +153,9 @@ namespace elFinder.Net.Core
                                 {
                                     if (openCmd.TargetPath.IsRoot && volume == openVolume) continue;
 
-                                    var rootVolumeDir = volume.Driver.CreateDirectory(openVolume.RootDirectory, openVolume);
-                                    var hash = rootVolumeDir.GetHash(openVolume, pathParser);
-                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, openVolume, cancellationToken));
+                                    var rootVolumeDir = volume.Driver.CreateDirectory(volume.RootDirectory, volume);
+                                    var hash = rootVolumeDir.GetHash(volume, pathParser);
+                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, volume, cancellationToken));
                                 }
                             }
 
