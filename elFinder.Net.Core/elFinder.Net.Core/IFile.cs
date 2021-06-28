@@ -13,7 +13,7 @@ namespace elFinder.Net.Core
         Task<long> LengthAsync { get; }
         MimeType MimeType { get; }
 
-        Task<IFile> CopyToAsync(string newDest, bool copyOverwrite, bool verify = true, CancellationToken cancellationToken = default);
+        Task<IFile> CopyToAsync(string newDest, IVolume destVolume, bool copyOverwrite, bool verify = true, CancellationToken cancellationToken = default);
 
         Task<ImageWithMimeType> CreateThumbAsync(string originalPath, int tmbSize, IPictureEditor pictureEditor, bool verify = true, CancellationToken cancellationToken = default);
 

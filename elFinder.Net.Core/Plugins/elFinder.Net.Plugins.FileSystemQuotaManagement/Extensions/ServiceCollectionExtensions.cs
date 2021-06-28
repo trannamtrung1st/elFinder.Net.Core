@@ -13,7 +13,6 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions
     {
         public static IServiceCollection AddFileSystemQuotaManagement(this IServiceCollection services, PluginCollection collection,
             Action<StorageManagerOptions> storageManagerOptionsConfig = null,
-            Type connectorImplType = null,
             Type fileSystemDriverImplType = null,
             Type connectorOptionsType = null)
         {

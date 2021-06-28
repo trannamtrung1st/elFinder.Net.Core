@@ -2,6 +2,7 @@ using elFinder.Net.AdvancedDemo.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
 
 namespace elFinder.Net.AdvancedDemo
 {
@@ -19,11 +20,13 @@ namespace elFinder.Net.AdvancedDemo
                     Id = 1,
                     UserName = "mrdavid",
                     VolumePath = "mrdavid",
+                    QuotaInBytes = 10 * (long)Math.Pow(1024, 2),
                 }, new AppUser
                 {
                     Id = 2,
                     UserName = "msdiana",
                     VolumePath = "msdiana",
+                    QuotaInBytes = 20 * (long)Math.Pow(1024, 2),
                 });
 
                 dbContext.SaveChanges();

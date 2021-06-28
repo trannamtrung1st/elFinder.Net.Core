@@ -4,8 +4,6 @@ using elFinder.Net.Core.Models.Command;
 using elFinder.Net.Core.Models.Response;
 using elFinder.Net.Core.Services;
 using elFinder.Net.Core.Services.Drawing;
-using elFinder.Net.Drivers.FileSystem.Factories;
-using elFinder.Net.Drivers.FileSystem.Streams;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Contexts;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Exceptions;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
@@ -21,13 +19,13 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 {
     public class DriverInterceptor : IInterceptor
     {
+        private const int DefaultBufferSize = 81920;
+
         protected readonly PluginManager pluginManager;
         protected readonly QuotaManagementContext context;
         protected readonly IConnector connector;
         protected readonly IPathParser pathParser;
         protected readonly IPictureEditor pictureEditor;
-        protected readonly IFileSystemDirectoryFactory directoryFactory;
-        protected readonly IFileSystemFileFactory fileFactory;
         protected readonly IStorageManager storageManager;
 
         private readonly ISet<string> _registeredHandlers;
@@ -37,8 +35,6 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             IConnector connector,
             IPathParser pathParser,
             IPictureEditor pictureEditor,
-            IFileSystemFileFactory fileFactory,
-            IFileSystemDirectoryFactory directoryFactory,
             IStorageManager storageManager)
         {
             this.pluginManager = pluginManager;
@@ -46,8 +42,6 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             this.connector = connector;
             this.pathParser = pathParser;
             this.pictureEditor = pictureEditor;
-            this.fileFactory = fileFactory;
-            this.directoryFactory = directoryFactory;
             this.storageManager = storageManager;
 
             _registeredHandlers = new HashSet<string>();
@@ -128,8 +122,8 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 var driver = invocation.InvocationTarget as IDriver;
                 var fromVolume = pasteCmd.TargetPaths.Select(o => o.Volume).First();
                 var dstVolume = pasteCmd.DstPath.Volume;
-                var fromDirectory = directoryFactory.Create(fromVolume.RootDirectory, fromVolume, fileFactory);
-                var dstDirectory = directoryFactory.Create(dstVolume.RootDirectory, dstVolume, fileFactory);
+                var fromDirectory = driver.CreateDirectory(fromVolume.RootDirectory, fromVolume);
+                var dstDirectory = driver.CreateDirectory(dstVolume.RootDirectory, dstVolume);
                 var cancellationToken = (CancellationToken)invocation.Arguments.Last();
 
                 DirectoryStorageCache fromStorageCache = null;
@@ -247,7 +241,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
         protected virtual void InterceptCopy<T>(IInvocation invocation, IVolume dstVolume, QuotaOptions quotaOptions)
         {
             var driver = invocation.InvocationTarget as IDriver;
-            var dstDirectory = directoryFactory.Create(dstVolume.RootDirectory, dstVolume, fileFactory);
+            var dstDirectory = driver.CreateDirectory(dstVolume.RootDirectory, dstVolume);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
 
             DirectoryStorageCache storageCache = null;
@@ -310,9 +304,10 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
         protected virtual void InterceptRm(IInvocation invocation, QuotaOptions quotaOptions)
         {
+            var driver = invocation.InvocationTarget as IDriver;
             var rmCmd = invocation.Arguments[0] as RmCommand;
             var volume = rmCmd.TargetPaths.Select(o => o.Volume).First();
-            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
 
             try
             {
@@ -334,7 +329,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var driver = invocation.InvocationTarget as IDriver;
             var cmd = invocation.Arguments[0] as UploadCommand;
             var volume = cmd.TargetPath.Volume;
-            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
             double? maximum = null;
 
@@ -414,7 +409,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var driver = invocation.InvocationTarget as IDriver;
             var cmd = invocation.Arguments[0] as TargetCommand;
             var volume = cmd.TargetPath.Volume;
-            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
             double? maximum = null;
 
@@ -465,7 +460,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     {
                         using (var stream = args.OpenStreamFunc().Result)
                         {
-                            stream.CopyTo(memStream, StreamConstants.DefaultBufferSize);
+                            stream.CopyTo(memStream, DefaultBufferSize);
                             writeLength = memStream.Length;
                         }
                     }
@@ -531,7 +526,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var driver = invocation.InvocationTarget as IDriver;
             var cmd = invocation.Arguments[0] as ArchiveCommand;
             var volume = cmd.TargetPath.Volume;
-            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
             double? maximum = null;
 
@@ -600,7 +595,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var driver = invocation.InvocationTarget as IDriver;
             var cmd = invocation.Arguments[0] as ExtractCommand;
             var volume = cmd.TargetPath.Volume;
-            var volumeDir = directoryFactory.Create(volume.RootDirectory, volume, fileFactory);
+            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
             double? maximum = null;
 

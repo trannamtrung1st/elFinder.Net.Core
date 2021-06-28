@@ -42,9 +42,7 @@ namespace elFinder.Net.Core
         event EventHandler<(string Content, string Encoding, IFile File)> OnAfterWriteContent;
         #endregion
 
-        void AddVolume(IVolume volume);
         Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default);
-        Task<IVolume> FindOwnVolumeAsync(string fullPath, CancellationToken cancellationToken = default);
         Task<OpenResponse> OpenAsync(OpenCommand cmd, CancellationToken cancellationToken = default);
         Task<InfoResponse> InfoAsync(InfoCommand cmd, CancellationToken cancellationToken = default);
         Task<ArchiveResponse> ArchiveAsync(ArchiveCommand cmd, CancellationToken cancellationToken = default);
@@ -71,6 +69,7 @@ namespace elFinder.Net.Core
         Task<FileResponse> ZipdlRawAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
         Task<PathInfo> ParsePathAsync(string decodedPath, IVolume volume, string hashedTarget,
             bool createIfNotExists = true, bool fileByDefault = true, CancellationToken cancellationToken = default);
-        IFile CreateFileObject(string path, IVolume volume);
+        IFile CreateFile(string fullPath, IVolume volume);
+        IDirectory CreateDirectory(string fullPath, IVolume volume);
     }
 }

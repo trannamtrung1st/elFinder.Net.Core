@@ -4,7 +4,6 @@ using elFinder.Net.Core.Extensions;
 using elFinder.Net.Core.Helpers;
 using elFinder.Net.Core.Services.Drawing;
 using elFinder.Net.Drivers.FileSystem.Extensions;
-using elFinder.Net.Drivers.FileSystem.Factories;
 using elFinder.Net.Drivers.FileSystem.Helpers;
 using System;
 using System.IO;
@@ -17,27 +16,17 @@ namespace elFinder.Net.Drivers.FileSystem
     {
         protected FileInfo fileInfo;
         protected readonly IVolume volume;
-        protected readonly IFileSystemDirectoryFactory directoryFactory;
-        protected readonly IFileSystemFileFactory fileFactory;
 
-        internal FileSystemFile(string filePath, IVolume volume,
-            IFileSystemFileFactory fileFactory,
-            IFileSystemDirectoryFactory directoryFactory)
+        public FileSystemFile(string filePath, IVolume volume)
         {
             fileInfo = new FileInfo(filePath);
             this.volume = volume;
-            this.fileFactory = fileFactory;
-            this.directoryFactory = directoryFactory;
         }
 
-        internal FileSystemFile(FileInfo fileInfo, IVolume volume,
-            IFileSystemFileFactory fileFactory,
-            IFileSystemDirectoryFactory directoryFactory)
+        public FileSystemFile(FileInfo fileInfo, IVolume volume)
         {
             this.fileInfo = fileInfo;
             this.volume = volume;
-            this.fileFactory = fileFactory;
-            this.directoryFactory = directoryFactory;
         }
 
         public IVolume Volume => volume;
@@ -72,7 +61,7 @@ namespace elFinder.Net.Drivers.FileSystem
             get
             {
                 if (_parent == null)
-                    _parent = directoryFactory.Create(fileInfo.Directory, volume, fileFactory);
+                    _parent = new FileSystemDirectory(fileInfo.Directory, volume);
                 return _parent;
             }
         }
@@ -201,20 +190,17 @@ namespace elFinder.Net.Drivers.FileSystem
 
             var newPath = PathHelper.GetFullPath(Parent.FullName, newName);
             fileInfo.MoveTo(newPath);
-            return Task.FromResult<IFile>(fileFactory.Create(newPath, volume, directoryFactory));
+            return Task.FromResult<IFile>(new FileSystemFile(newPath, volume));
         }
 
-        public virtual async Task<IFile> CopyToAsync(string newDest, bool copyOverwrite,
+        public virtual async Task<IFile> CopyToAsync(string newDest, IVolume destVolume, bool copyOverwrite,
             bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (verify && !this.CanCopy()) throw new PermissionDeniedException();
 
-            var destVolume = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destVolume == null) throw new PermissionDeniedException();
-
-            var destInfo = fileFactory.Create(newDest, destVolume, directoryFactory);
+            var destInfo = new FileSystemFile(newDest, destVolume);
             if (verify && !await destInfo.CanCopyToAsync())
                 throw new PermissionDeniedException();
 
@@ -223,19 +209,17 @@ namespace elFinder.Net.Drivers.FileSystem
 
             var info = fileInfo.CopyTo(newDest, copyOverwrite);
 
-            return fileFactory.Create(info, destVolume, directoryFactory);
+            return new FileSystemFile(info, destVolume);
         }
 
-        public virtual async Task<IFile> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default)
+        public virtual async Task<IFile> MoveToAsync(string newDest, IVolume destVolume,
+            bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
-            var destVolume = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destVolume == null) throw new PermissionDeniedException();
-
-            var destInfo = fileFactory.Create(newDest, destVolume, directoryFactory);
+            var destInfo = new FileSystemFile(newDest, destVolume);
             if (verify && !await destInfo.CanMoveToAsync())
                 throw new PermissionDeniedException();
 
@@ -244,7 +228,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             fileInfo.MoveTo(newDest);
 
-            return fileFactory.Create(newDest, destVolume, directoryFactory);
+            return new FileSystemFile(newDest, destVolume);
         }
 
         public virtual Task<bool> IsChildOfAsync(string fullPath)

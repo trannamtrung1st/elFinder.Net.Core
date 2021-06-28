@@ -7,6 +7,9 @@ namespace elFinder.Net.Core.Models.Response
     public class InitResponse : OpenResponse
     {
         private static readonly string[] _empty = new string[0];
+
+        public InitResponse() : base() { }
+
         public InitResponse(BaseInfoResponse cwd, ConnectorResponseOptions options) : base(cwd, options)
         {
         }

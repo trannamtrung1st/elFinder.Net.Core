@@ -55,8 +55,6 @@ namespace elFinder.Net.Demo31.Controllers
                 };
 
                 _connector.AddVolume(volume);
-                _driver.AddVolume(volume);
-
                 await volume.Driver.SetupVolumeAsync(volume);
             }
 

@@ -1,15 +1,20 @@
 ﻿using elFinder.Net.AdvancedDemo.Models;
+using elFinder.Net.AdvancedDemo.Models.Responses;
 using elFinder.Net.AspNetCore.Extensions;
 using elFinder.Net.AspNetCore.Helper;
 using elFinder.Net.Core;
+using elFinder.Net.Core.Models.Response;
+using elFinder.Net.Core.Models.Result;
 using elFinder.Net.Drivers.FileSystem.Helpers;
 using elFinder.Net.Plugins.FileSystemQuotaManagement;
+using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,21 +26,28 @@ namespace elFinder.Net.AdvancedDemo.Controllers
     {
         private readonly IConnector _connector;
         private readonly IDriver _driver;
+        private readonly IStorageManager _storageManager;
+        private readonly DataContext _dataContext;
 
         public FilesController(IConnector connector,
-            IDriver driver)
+            IDriver driver,
+            IStorageManager storageManager,
+            DataContext dataContext)
         {
             _connector = connector;
             _driver = driver;
+            _storageManager = storageManager;
+            _dataContext = dataContext;
         }
 
         [Route("connector")]
         public async Task<IActionResult> Connector()
         {
             var ccTokenSource = ConnectorHelper.RegisterCcTokenSource(HttpContext);
-            await SetupConnectorAsync(ccTokenSource.Token);
+            var (volume, quota) = await SetupConnectorAsync(ccTokenSource.Token);
             var cmd = ConnectorHelper.ParseCommand(Request);
             var conResult = await _connector.ProcessAsync(cmd, ccTokenSource);
+            CustomizeResponse(conResult, volume, quota);
             var actionResult = conResult.ToActionResult(HttpContext);
             return actionResult;
         }
@@ -49,12 +61,37 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             return actionResult;
         }
 
-        private async Task SetupConnectorAsync(CancellationToken cancellationToken)
+        private void CustomizeResponse(ConnectorResult connectorResult, IVolume volume, long quota)
+        {
+            var storageCache = _storageManager.GetOrCreateDirectoryStorage(volume.RootDirectory,
+                    (dir) => volume.Driver.CreateDirectory(dir, volume).GetPhysicalStorageUsageAsync(HttpContext.RequestAborted));
+
+            if (connectorResult.Response is InitResponse initResp)
+            {
+                connectorResult.Response = new ApplicationInitResponse(initResp)
+                {
+                    quota = quota,
+                    usage = storageCache.Storage
+                };
+            }
+            else if (connectorResult.Response is OpenResponse openResp)
+            {
+                connectorResult.Response = new ApplicationOpenResponse(openResp)
+                {
+                    quota = quota,
+                    usage = storageCache.Storage
+                };
+            }
+        }
+
+        private async Task<(IVolume Volume, long Quota)> SetupConnectorAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var user = User;
-            var volumePath = user.FindFirst(nameof(AppUser.VolumePath)).Value;
+            var userId = int.Parse(User.Identity.Name);
+            var user = _dataContext.Users.Single(o => o.Id == userId);
+            var volumePath = user.VolumePath;
+            var quota = user.QuotaInBytes;
 
             // Quota management: The 2 line belows is setup once per request
             var quotaOptions = new QuotaOptions() { Enabled = true };
@@ -68,7 +105,6 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             };
 
             _connector.AddVolume(volume);
-            _driver.AddVolume(volume);
             await _driver.SetupVolumeAsync(volume, cancellationToken);
 
             // Events
@@ -82,7 +118,9 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             quotaOptions.Quotas[volume.VolumeId] = new VolumeQuota
             {
                 VolumeId = volume.VolumeId,
-                MaxStorageSizeInMb = 10
+                MaxStorageSizeInMb = quota / Math.Pow(1024, 2),
+                //MaxStorageSizeInKb = quota / 1024,
+                //MaxStorageSize = quota,
             };
 
             #region Access Control Management
@@ -180,6 +218,8 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             //    Access = false
             //};
             #endregion
+
+            return (volume, quota);
         }
     }
 }

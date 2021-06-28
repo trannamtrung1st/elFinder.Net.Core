@@ -139,13 +139,26 @@ namespace elFinder.Net.Core
                                 openCmd.Init = init;
                             if (byte.TryParse(args.GetValueOrDefault(ConnectorCommand.Param_Tree), out var tree))
                                 openCmd.Tree = tree;
-                            var volume = openCmd.TargetPath?.Volume ?? Volumes.FirstOrDefault();
-                            openCmd.Volume = volume;
+                            var openVolume = openCmd.TargetPath?.Volume ?? Volumes.FirstOrDefault();
+                            openCmd.Volume = openVolume;
                             cmd.CmdObject = openCmd;
 
-                            if (volume == null) throw new FileNotFoundException();
+                            if (openVolume == null) throw new FileNotFoundException();
 
-                            var openResp = await volume.Driver.OpenAsync(openCmd, cancellationToken);
+                            var openResp = await openVolume.Driver.OpenAsync(openCmd, cancellationToken);
+
+                            if (openCmd.Tree == 1)
+                            {
+                                foreach (var volume in Volumes)
+                                {
+                                    if (openCmd.TargetPath.IsRoot && volume == openVolume) continue;
+
+                                    var rootVolumeDir = volume.Driver.CreateDirectory(openVolume.RootDirectory, openVolume);
+                                    var hash = rootVolumeDir.GetHash(openVolume, pathParser);
+                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, openVolume, cancellationToken));
+                                }
+                            }
+
                             return ConnectorResult.Success(openResp);
                         }
                     case ConnectorCommand.Cmd_Archive:
@@ -641,7 +654,7 @@ namespace elFinder.Net.Core
                         }
                         else
                         {
-                            thumbFile = pathInfo.Volume.Driver.CreateFileObject($"{volumeThumbDir}{separatorChar}{pathInfo.Path}", pathInfo.Volume);
+                            thumbFile = pathInfo.Volume.Driver.CreateFile($"{volumeThumbDir}{separatorChar}{pathInfo.Path}", pathInfo.Volume);
                         }
 
                         if (!await thumbFile.ExistsAsync)

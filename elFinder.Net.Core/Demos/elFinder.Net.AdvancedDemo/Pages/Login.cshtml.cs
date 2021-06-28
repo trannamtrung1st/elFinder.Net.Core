@@ -33,7 +33,6 @@ namespace elFinder.Net.AdvancedDemo.Pages
 
             var identity = new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme);
             identity.AddClaim(new Claim(ClaimTypes.Name, $"{user.Id}"));
-            identity.AddClaim(new Claim(nameof(user.VolumePath), user.VolumePath));
             identity.AddClaim(new Claim(nameof(user.UserName), user.UserName));
 
             var principal = new ClaimsPrincipal(identity);

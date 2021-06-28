@@ -3,7 +3,6 @@ using elFinder.Net.Core.Exceptions;
 using elFinder.Net.Core.Extensions;
 using elFinder.Net.Core.Models;
 using elFinder.Net.Drivers.FileSystem.Extensions;
-using elFinder.Net.Drivers.FileSystem.Factories;
 using elFinder.Net.Drivers.FileSystem.Helpers;
 using System;
 using System.Collections.Generic;
@@ -18,27 +17,17 @@ namespace elFinder.Net.Drivers.FileSystem
     {
         protected DirectoryInfo directoryInfo;
         protected readonly IVolume volume;
-        protected readonly IFileSystemFileFactory fileFactory;
-        protected readonly IFileSystemDirectoryFactory directoryFactory;
 
-        internal FileSystemDirectory(string dirName, IVolume volume,
-            IFileSystemFileFactory fileFactory,
-            IFileSystemDirectoryFactory directoryFactory)
+        public FileSystemDirectory(string dirName, IVolume volume)
         {
             directoryInfo = new DirectoryInfo(dirName);
             this.volume = volume;
-            this.fileFactory = fileFactory;
-            this.directoryFactory = directoryFactory;
         }
 
-        internal FileSystemDirectory(DirectoryInfo directoryInfo, IVolume volume,
-            IFileSystemFileFactory fileFactory,
-            IFileSystemDirectoryFactory directoryFactory)
+        public FileSystemDirectory(DirectoryInfo directoryInfo, IVolume volume)
         {
             this.directoryInfo = directoryInfo;
             this.volume = volume;
-            this.fileFactory = fileFactory;
-            this.directoryFactory = directoryFactory;
         }
 
         public IVolume Volume => volume;
@@ -81,7 +70,7 @@ namespace elFinder.Net.Drivers.FileSystem
             get
             {
                 if (_parent == null && directoryInfo.Parent != null)
-                    _parent = directoryFactory.Create(directoryInfo.Parent, volume, fileFactory);
+                    _parent = new FileSystemDirectory(directoryInfo.Parent, volume);
                 return _parent;
             }
         }
@@ -148,7 +137,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
 
-            var dirs = directoryInfo.EnumerateDirectories().Select(dir => directoryFactory.Create(dir, volume, fileFactory) as IDirectory);
+            var dirs = directoryInfo.EnumerateDirectories().Select(dir => new FileSystemDirectory(dir, volume) as IDirectory);
 
             if (filter != null) dirs = dirs.Where(filter);
             else dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
@@ -164,7 +153,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (verfify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
 
             var dirs = directoryInfo.EnumerateDirectories(search, searchOption)
-                .Select(dir => directoryFactory.Create(dir, volume, fileFactory) as IDirectory);
+                .Select(dir => new FileSystemDirectory(dir, volume) as IDirectory);
 
             if (filter != null) dirs = dirs.Where(filter);
             else dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
@@ -179,7 +168,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
-            var files = directoryInfo.EnumerateFiles().Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
+            var files = directoryInfo.EnumerateFiles().Select(f => new FileSystemFile(f, volume) as IFile);
 
             if (filter != null) files = files.Where(filter);
             else files = files.Where(file => file.ObjectAttribute.Visible);
@@ -194,7 +183,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
-            var files = directoryInfo.EnumerateFiles().Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
+            var files = directoryInfo.EnumerateFiles().Select(f => new FileSystemFile(f, volume) as IFile);
 
             if (filter != null) files = files.Where(filter);
             else files = files.Where(file => file.ObjectAttribute.Visible);
@@ -214,7 +203,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
-            var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
+            var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => new FileSystemFile(f, volume) as IFile);
 
             if (filter != null) files = files.Where(filter);
             else files = files.Where(file => file.ObjectAttribute.Visible);
@@ -229,7 +218,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
 
-            var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => fileFactory.Create(f, volume, directoryFactory) as IFile);
+            var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => new FileSystemFile(f, volume) as IFile);
 
             if (filter != null) files = files.Where(filter);
             else files = files.Where(file => file.ObjectAttribute.Visible);
@@ -250,19 +239,17 @@ namespace elFinder.Net.Drivers.FileSystem
 
             var newPath = PathHelper.GetFullPath(Parent.FullName, newName);
             directoryInfo.MoveTo(newPath);
-            return Task.FromResult<IDirectory>(directoryFactory.Create(newPath, volume, fileFactory));
+            return Task.FromResult<IDirectory>(new FileSystemDirectory(newPath, volume));
         }
 
-        public virtual async Task<IDirectory> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default)
+        public virtual async Task<IDirectory> MoveToAsync(string newDest, IVolume destVolume,
+            bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
-            var destDriver = await volume.Driver.FindOwnVolumeAsync(newDest, cancellationToken);
-            if (destDriver == null) throw new PermissionDeniedException();
-
-            var destInfo = directoryFactory.Create(newDest, destDriver, fileFactory);
+            var destInfo = new FileSystemDirectory(newDest, destVolume);
             if (verify && !await destInfo.CanMoveToAsync())
                 throw new PermissionDeniedException();
 
@@ -271,7 +258,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             directoryInfo.MoveTo(newDest);
 
-            return directoryFactory.Create(newDest, volume, fileFactory);
+            return new FileSystemDirectory(newDest, volume);
         }
 
         public virtual async Task<DirectorySizeAndCount> GetSizeAndCountAsync(bool verify = true, Func<IDirectory, bool> dirFilter = null,

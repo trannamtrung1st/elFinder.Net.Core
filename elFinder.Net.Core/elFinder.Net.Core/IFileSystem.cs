@@ -36,7 +36,7 @@ namespace elFinder.Net.Core
     {
         Task<Type> RenameAsync(string newName, bool verify = true, CancellationToken cancellationToken = default);
 
-        Task<Type> MoveToAsync(string newDest, bool verify = true, CancellationToken cancellationToken = default);
+        Task<Type> MoveToAsync(string newDest, IVolume destVolume, bool verify = true, CancellationToken cancellationToken = default);
 
         Task CreateAsync(bool verify = true, CancellationToken cancellationToken = default);
 
