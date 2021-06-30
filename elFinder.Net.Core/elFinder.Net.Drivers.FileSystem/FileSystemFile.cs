@@ -170,7 +170,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 if (ext == ".mp4" || ext == ".avi" || ext == ".mxf" || ext == ".webm" || ext == ".mkv" || ext == ".flv"
                 || ext == ".mpeg" || ext == ".mov")
                 {
-                    var image = pictureEditor.GenerateVideoThumbnail(originalPath);
+                    var image = await pictureEditor.GenerateVideoThumbnailAsync(originalPath);
                     using (var originalImage = File.OpenRead(image))
                     {
                         var thumb = pictureEditor.GenerateThumbnail(originalImage, tmbSize, true);

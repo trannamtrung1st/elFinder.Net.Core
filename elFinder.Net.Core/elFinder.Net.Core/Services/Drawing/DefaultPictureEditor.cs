@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Threading.Tasks;
+using Xabe.FFmpeg;
 
 namespace elFinder.Net.Core.Services.Drawing
 {
@@ -97,36 +99,23 @@ namespace elFinder.Net.Core.Services.Drawing
             }
         }
 
-        public virtual string GenerateVideoThumbnail(string filePath)
+        public virtual async Task<string> GenerateVideoThumbnailAsync(string filePath)
         {
-            string thumb = "";
+            string output = "";
 
             try
             {
-                FileInfo fi = new FileInfo(filePath);
-                string filename = Path.GetFileNameWithoutExtension(fi.Name);
-                Random random = new Random();
-                int rand = random.Next(1, 9999999);
-                string newfilename = fi.DirectoryName + filename + "___(" + rand.ToString() + ").png";
-                var processInfo = new ProcessStartInfo();
-                processInfo.FileName = "/usr/local/bin/ffmpeg";
-                processInfo.Arguments = string.Format("-ss {0} -i {1} -f image2 -vframes 1 -y {2}", 5, "\"" + filePath + "\"", "\"" + newfilename + "\"");
-                processInfo.CreateNoWindow = true;
-                processInfo.UseShellExecute = false;
-                using (var process = new Process())
-                {
-                    process.StartInfo = processInfo;
-                    process.Start();
-                    process.WaitForExit();
-                    thumb = newfilename;
-                }
+                output = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".png");
+
+                IConversion conversion = await FFmpeg.Conversions.FromSnippet.Snapshot(filePath, output, TimeSpan.FromSeconds(5));
+                IConversionResult result = await conversion.Start();
             }
             catch (Exception ex)
             {
                 string error = ex.Message;
             }
 
-            return thumb;
+            return output;
 
         }
 

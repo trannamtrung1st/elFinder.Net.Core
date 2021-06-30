@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace elFinder.Net.Core.Services.Drawing
 {
@@ -54,7 +55,7 @@ namespace elFinder.Net.Core.Services.Drawing
         /// <param name="size">Size in pixels of output thumbnail. Thumbnail is square.</param>
         /// <param name="keepAspectRatio"><c>True</c> if aspect ratio of output thumbnail must equal aspect ratio of input image.</param>
         /// <returns>Generated thumbnail</returns>
-        string GenerateVideoThumbnail(string filePath);
+        Task<string> GenerateVideoThumbnailAsync(string filePath);
 
         /// <summary>
         /// Get Width and Height of the image
