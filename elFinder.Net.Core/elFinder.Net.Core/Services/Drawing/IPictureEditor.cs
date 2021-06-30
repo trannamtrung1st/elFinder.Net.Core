@@ -48,6 +48,15 @@ namespace elFinder.Net.Core.Services.Drawing
         ImageWithMimeType GenerateThumbnail(Stream input, int size, bool keepAspectRatio);
 
         /// <summary>
+        /// Generates a thumbnail of the given video
+        /// </summary>
+        /// <param name="input">Input stream of video</param>
+        /// <param name="size">Size in pixels of output thumbnail. Thumbnail is square.</param>
+        /// <param name="keepAspectRatio"><c>True</c> if aspect ratio of output thumbnail must equal aspect ratio of input image.</param>
+        /// <returns>Generated thumbnail</returns>
+        string GenerateVideoThumbnail(string filePath);
+
+        /// <summary>
         /// Get Width and Height of the image
         /// </summary>
         /// <param name="input">Input stream of image</param>

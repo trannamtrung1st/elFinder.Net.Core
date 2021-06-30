@@ -166,9 +166,27 @@ namespace elFinder.Net.Drivers.FileSystem
 
             using (var original = File.OpenRead(originalPath))
             {
-                var thumb = pictureEditor.GenerateThumbnail(original, tmbSize, true);
-                await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
-                return thumb;
+                string ext = Path.GetExtension(original.Name);
+                if (ext == ".mp4" || ext == ".avi" || ext == ".mxf" || ext == ".webm" || ext == ".mkv" || ext == ".flv"
+                || ext == ".mpeg" || ext == ".mov")
+                {
+                    var image = pictureEditor.GenerateVideoThumbnail(originalPath);
+                    using (var originalImage = File.OpenRead(image))
+                    {
+                        var thumb = pictureEditor.GenerateThumbnail(originalImage, tmbSize, true);
+                        await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
+                        File.Delete(image);
+                        return thumb;
+                    }
+                }
+                else
+                {
+                    var thumb = pictureEditor.GenerateThumbnail(original, tmbSize, true);
+                    await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
+                    return thumb;
+                }
+
+                
             }
         }
 

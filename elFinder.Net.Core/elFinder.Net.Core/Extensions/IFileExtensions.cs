@@ -45,9 +45,21 @@ namespace elFinder.Net.Core.Extensions
                 && pictureEditor.CanProcessFile(file.Extension) && fileLength > 0
                 && file.ObjectAttribute.Read)
             {
-                var imgResponse = new ImageInfoResponse();
-                response = imgResponse;
-                imgResponse.tmb = await volume.GenerateThumbHashAsync(file, pathParser, pictureEditor, cancellationToken);
+                if(file.Extension == ".mp4" || file.Extension == ".avi" || file.Extension == ".mxf" || file.Extension == ".webm"
+                || file.Extension == ".mkv" || file.Extension == ".flv"
+                || file.Extension == ".mpeg" || file.Extension == ".mov")
+                {
+                    var vidResponse = new VideoInfoResponse();
+                    response = vidResponse;
+                    vidResponse.tmb = await volume.GenerateThumbHashAsync(file, pathParser, pictureEditor, cancellationToken);
+                }
+                else
+                {
+                    var imgResponse = new ImageInfoResponse();
+                    response = imgResponse;
+                    imgResponse.tmb = await volume.GenerateThumbHashAsync(file, pathParser, pictureEditor, cancellationToken);
+                }
+                
             }
             else response = new FileInfoResponse();
 

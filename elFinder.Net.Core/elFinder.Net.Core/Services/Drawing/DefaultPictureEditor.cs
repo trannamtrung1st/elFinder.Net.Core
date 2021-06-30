@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -32,13 +33,17 @@ namespace elFinder.Net.Core.Services.Drawing
         public virtual bool CanProcessFile(string fileExtension)
         {
             string ext = fileExtension.ToLower();
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".tiff";
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".tiff"
+                //video ext
+                || ext == ".mp4" || ext == ".avi" || ext == ".mxf" || ext == ".webm" || ext == ".mkv" || ext == ".flv"
+                || ext == ".mpeg" || ext == ".mov"; 
         }
 
         public virtual string ConvertThumbnailExtension(string originalImageExtension)
         {
             string ext = originalImageExtension.ToLower();
-            if (ext == ".tiff")
+            if (ext == ".tiff" || ext == ".mp4" || ext == ".avi" || ext == ".mxf" || ext == ".webm" || ext == ".mkv" || ext == ".flv"
+                || ext == ".mpeg" || ext == ".mov")
             {
                 return ".png";
             }
@@ -90,6 +95,39 @@ namespace elFinder.Net.Core.Services.Drawing
                     new Rectangle(0, 0, inputImage.Width, inputImage.Height),
                     new Rectangle(0, 0, targetWidth, targetHeight));
             }
+        }
+
+        public virtual string GenerateVideoThumbnail(string filePath)
+        {
+            string thumb = "";
+
+            try
+            {
+                FileInfo fi = new FileInfo(filePath);
+                string filename = Path.GetFileNameWithoutExtension(fi.Name);
+                Random random = new Random();
+                int rand = random.Next(1, 9999999);
+                string newfilename = fi.DirectoryName + filename + "___(" + rand.ToString() + ").png";
+                var processInfo = new ProcessStartInfo();
+                processInfo.FileName = "/usr/local/bin/ffmpeg";
+                processInfo.Arguments = string.Format("-ss {0} -i {1} -f image2 -vframes 1 -y {2}", 5, "\"" + filePath + "\"", "\"" + newfilename + "\"");
+                processInfo.CreateNoWindow = true;
+                processInfo.UseShellExecute = false;
+                using (var process = new Process())
+                {
+                    process.StartInfo = processInfo;
+                    process.Start();
+                    process.WaitForExit();
+                    thumb = newfilename;
+                }
+            }
+            catch (Exception ex)
+            {
+                string error = ex.Message;
+            }
+
+            return thumb;
+
         }
 
         public virtual Size ImageSize(Stream input)
