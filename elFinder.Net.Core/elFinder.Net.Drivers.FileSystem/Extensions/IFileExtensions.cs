@@ -1,4 +1,5 @@
 ﻿using elFinder.Net.Core;
+using elFinder.Net.Drivers.FileSystem.Helpers;
 using System;
 using System.IO;
 using System.Linq;
@@ -23,7 +24,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
             }
 
             string newName = $"{name}{suffix}{extension}";
-            if (!File.Exists(Path.Combine(file.DirectoryName, newName)))
+            if (!File.Exists(PathHelper.SafelyCombine(file.DirectoryName, file.DirectoryName, newName)))
                 return newName;
             else
             {

@@ -1,4 +1,8 @@
-﻿using System.IO;
+﻿using elFinder.Net.Core.Exceptions;
+using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace elFinder.Net.Drivers.FileSystem
@@ -11,11 +15,15 @@ namespace elFinder.Net.Drivers.FileSystem
 
     public class TempZipDownloadPathProvider : IZipDownloadPathProvider
     {
+        private readonly HMAC _hmac = new HMACSHA256();
+        private static readonly string Postfix = '_' + nameof(elFinder);
+
         public Task<(string ArchiveFilePath, string ArchiveFileKey)> GetFileForArchivingAsync()
         {
-            var tempFile = Path.GetTempFileName();
+            var bytes = Encoding.UTF8.GetBytes(Path.GetTempFileName() + Guid.NewGuid().ToString());
+            var tempFile = Path.Combine(Path.GetTempPath(),
+                BitConverter.ToString(_hmac.ComputeHash(bytes)).Replace("-", string.Empty) + Postfix);
             var tempFileName = Path.GetFileName(tempFile);
-
             return Task.FromResult((tempFile, tempFileName));
         }
 
@@ -23,7 +31,18 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             var tempDirPath = Path.GetTempPath();
 
-            return Task.FromResult(Path.Combine(tempDirPath, archiveFileKey));
+            if (Path.IsPathRooted(archiveFileKey)) throw new PermissionDeniedException("Malformed key");
+
+            var fullPath = Path.GetFullPath(Path.Combine(tempDirPath, archiveFileKey));
+            if (!fullPath.StartsWith(tempDirPath.EndsWith($"{Path.DirectorySeparatorChar}")
+                ? tempDirPath : (tempDirPath + Path.DirectorySeparatorChar)))
+                throw new PermissionDeniedException("Malformed key");
+
+            var fileName = Path.GetFileName(fullPath);
+            if (!fileName.EndsWith(Postfix))
+                throw new PermissionDeniedException("Malformed key");
+
+            return Task.FromResult(fullPath);
         }
     }
 }

@@ -374,6 +374,13 @@ namespace elFinder.Net.Core
                             if (targetPath.IsDirectory)
                                 throw new NotFileException();
 
+                            if (putCmd.Encoding == "hash")
+                            {
+                                putCmd.ContentPath = await ParsePathAsync(putCmd.Content, cancellationToken: cancellationToken);
+                                if (putCmd.ContentPath.IsDirectory)
+                                    throw new NotFileException();
+                            }
+
                             var putResp = await putCmd.TargetPath.Volume.Driver.PutAsync(putCmd, cancellationToken);
                             return ConnectorResult.Success(putResp);
                         }

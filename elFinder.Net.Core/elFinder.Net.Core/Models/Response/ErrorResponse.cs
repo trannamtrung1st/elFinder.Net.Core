@@ -84,6 +84,8 @@ namespace elFinder.Net.Core.Models.Response
         public const string CommandNoSupport = "errCmdNoSupport";
         public const string NotFile = "errNotFile";
         public const string UploadFile = "errUploadFile";
+        public const string InvalidFileName = "errInvName";
+        public const string InvalidDirName = "errInvDirname";
         #endregion
     }
 }

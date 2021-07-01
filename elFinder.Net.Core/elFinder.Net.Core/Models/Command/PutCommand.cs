@@ -4,5 +4,7 @@
     {
         public string Content { get; set; }
         public string Encoding { get; set; }
+
+        public PathInfo ContentPath { get; set; }
     }
 }

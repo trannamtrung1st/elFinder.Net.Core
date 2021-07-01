@@ -29,6 +29,7 @@ namespace elFinder.Net.Drivers.FileSystem
     public class FileSystemDriver : IDriver
     {
         public const string DefaultThumbExt = ".png";
+        private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
 
         protected readonly IPathParser pathParser;
         protected readonly IPictureEditor pictureEditor;
@@ -127,6 +128,9 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!IsObjectNameValid(cmd.Name))
+                throw new InvalidDirNameException();
+
             var mkdirResp = new MkdirResponse();
             var targetPath = cmd.TargetPath;
             var volume = targetPath.Volume;
@@ -136,7 +140,8 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (!string.IsNullOrEmpty(cmd.Name))
             {
-                var newDir = new FileSystemDirectory(Path.Combine(targetPath.Directory.FullName, cmd.Name), volume);
+                var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(targetPath.Directory.FullName,
+                    targetPath.Directory.FullName, cmd.Name), volume);
 
                 OnBeforeMakeDir?.Invoke(this, newDir);
                 await newDir.CreateAsync(cancellationToken: cancellationToken);
@@ -149,7 +154,8 @@ namespace elFinder.Net.Drivers.FileSystem
             foreach (string dir in cmd.Dirs)
             {
                 string dirName = dir.StartsWith("/") ? dir.Substring(1) : dir;
-                var newDir = new FileSystemDirectory(Path.Combine(targetPath.Directory.FullName, dirName), volume);
+                var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(targetPath.Directory.FullName,
+                    targetPath.Directory.FullName, dirName), volume);
 
                 OnBeforeMakeDir?.Invoke(this, newDir);
                 await newDir.CreateAsync(cancellationToken: cancellationToken);
@@ -170,13 +176,17 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!IsObjectNameValid(cmd.Name))
+                throw new InvalidFileNameException();
+
             var targetPath = cmd.TargetPath;
             var volume = targetPath.Volume;
             var targetHash = targetPath.HashedTarget;
 
             if (!targetPath.Directory.CanCreateObject()) throw new PermissionDeniedException();
 
-            var newFile = new FileSystemFile(Path.Combine(targetPath.Directory.FullName, cmd.Name), volume);
+            var newFile = new FileSystemFile(PathHelper.SafelyCombine(targetPath.Directory.FullName,
+                targetPath.Directory.FullName, cmd.Name), volume);
 
             OnBeforeMakeFile?.Invoke(this, newFile);
             await newFile.CreateAsync(cancellationToken: cancellationToken);
@@ -355,6 +365,11 @@ namespace elFinder.Net.Drivers.FileSystem
             var targetPath = cmd.TargetPath;
             var volume = targetPath.Volume;
 
+            if (!IsObjectNameValid(cmd.Name))
+                if (targetPath.IsDirectory)
+                    throw new InvalidDirNameException();
+                else throw new InvalidFileNameException();
+
             if (targetPath.IsDirectory)
             {
                 var prevName = targetPath.Directory.Name;
@@ -466,6 +481,15 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (cmd.Name.Any(name => !IsObjectNameValid(name)))
+                throw new InvalidFileNameException();
+
+            if (cmd.Renames.Any(name => !IsObjectNameValid(name)))
+                throw new InvalidFileNameException();
+
+            if (!IsObjectNameValid(cmd.Suffix))
+                throw new InvalidFileNameException();
+
             var uploadResp = new UploadResponse();
             var targetPath = cmd.TargetPath;
             var volume = targetPath.Volume;
@@ -513,7 +537,7 @@ namespace elFinder.Net.Drivers.FileSystem
                     if (!dest.CanCreateObject())
                         throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(dest)}");
 
-                    string uploadFullName = Path.Combine(dest.FullName, Path.GetFileName(formFile.FileName));
+                    string uploadFullName = PathHelper.SafelyCombine(dest.FullName, dest.FullName, Path.GetFileName(formFile.FileName));
                     var uploadFileInfo = new FileSystemFile(uploadFullName, volume);
                     var isOverwrite = false;
 
@@ -524,7 +548,7 @@ namespace elFinder.Net.Drivers.FileSystem
                             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(formFile.FileName);
                             var ext = Path.GetExtension(formFile.FileName);
                             var backupName = $"{fileNameWithoutExt}{cmd.Suffix}{ext}";
-                            var fullBakName = Path.Combine(uploadFileInfo.Parent.FullName, backupName);
+                            var fullBakName = PathHelper.SafelyCombine(uploadFileInfo.Parent.FullName, uploadFileInfo.Parent.FullName, backupName);
                             var bakFile = new FileSystemFile(fullBakName, volume);
 
                             if (await bakFile.ExistsAsync)
@@ -541,7 +565,7 @@ namespace elFinder.Net.Drivers.FileSystem
                         else if (cmd.Overwrite == 0 || (cmd.Overwrite == null && !volume.UploadOverwrite))
                         {
                             string newName = await uploadFileInfo.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
-                            uploadFullName = Path.Combine(uploadFileInfo.DirectoryName, newName);
+                            uploadFullName = PathHelper.SafelyCombine(uploadFileInfo.DirectoryName, uploadFileInfo.DirectoryName, newName);
                             uploadFileInfo = new FileSystemFile(uploadFullName, volume);
                             isOverwrite = false;
                         }
@@ -715,6 +739,12 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (cmd.Renames.Any(name => !IsObjectNameValid(name)))
+                throw new InvalidFileNameException();
+
+            if (!IsObjectNameValid(cmd.Suffix))
+                throw new InvalidFileNameException();
+
             var pasteResp = new PasteResponse();
             var isCut = cmd.Cut == 1;
             var dstPath = cmd.DstPath;
@@ -726,14 +756,14 @@ namespace elFinder.Net.Drivers.FileSystem
                 if (src.IsDirectory)
                 {
                     IDirectory pastedDir;
-                    var newDest = Path.Combine(dstPath.Directory.FullName, src.Directory.Name);
+                    var newDest = PathHelper.SafelyCombine(dstPath.Directory.FullName, dstPath.Directory.FullName, src.Directory.Name);
                     var newDestDir = new FileSystemDirectory(newDest, dstPath.Volume);
                     var exists = await newDestDir.ExistsAsync;
 
                     if (exists && cmd.Renames.Contains(newDestDir.Name))
                     {
                         var backupName = $"{newDestDir.Name}{cmd.Suffix}";
-                        var fullBakName = Path.Combine(newDestDir.Parent.FullName, backupName);
+                        var fullBakName = PathHelper.SafelyCombine(newDestDir.Parent.FullName, newDestDir.Parent.FullName, backupName);
                         var bakDir = new FileSystemDirectory(fullBakName, newDestDir.Volume);
 
                         if (await bakDir.ExistsAsync)
@@ -790,7 +820,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 {
                     IFile pastedFile;
                     var file = src.File;
-                    var newDest = Path.Combine(dstPath.Directory.FullName, file.Name);
+                    var newDest = PathHelper.SafelyCombine(dstPath.Directory.FullName, dstPath.Directory.FullName, file.Name);
                     var newDestFile = new FileSystemFile(newDest, dstPath.Volume);
                     var exists = await newDestFile.ExistsAsync;
 
@@ -799,7 +829,7 @@ namespace elFinder.Net.Drivers.FileSystem
                         var fileNameWithoutExt = Path.GetFileNameWithoutExtension(newDestFile.Name);
                         var ext = Path.GetExtension(newDestFile.Name);
                         var backupName = $"{fileNameWithoutExt}{cmd.Suffix}{ext}";
-                        var fullBakName = Path.Combine(newDestFile.Parent.FullName, backupName);
+                        var fullBakName = PathHelper.SafelyCombine(newDestFile.Parent.FullName, newDestFile.Parent.FullName, backupName);
                         var bakFile = new FileSystemFile(fullBakName, newDestFile.Volume);
 
                         if (await bakFile.ExistsAsync)
@@ -846,7 +876,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 if (src.IsDirectory)
                 {
                     var newName = await src.Directory.GetCopyNameAsync(cancellationToken: cancellationToken);
-                    var newDest = Path.Combine(src.Directory.Parent.FullName, newName);
+                    var newDest = PathHelper.SafelyCombine(src.Directory.Parent.FullName, src.Directory.Parent.FullName, newName);
 
                     OnBeforeCopy?.Invoke(this, (src.Directory, newDest, true));
                     var dupDir = await CopyToAsync(src.Directory, newDest, dstVolume, copyOverwrite: false, cancellationToken: cancellationToken);
@@ -906,13 +936,16 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!IsObjectNameValid(cmd.Name))
+                throw new InvalidFileNameException();
+
             if (cmd.Type != MediaTypeNames.Application.Zip)
                 throw new ArchiveTypeException();
 
             var archiveResp = new ArchiveResponse();
             var targetPath = cmd.TargetPath;
             var volume = cmd.TargetPath.Volume;
-            var directoryInfo = targetPath.Directory;
+            var directory = targetPath.Directory;
 
             var filename = cmd.Name ?? targetPath.Directory.Name;
             var zipExt = $".{FileExtensions.Zip}";
@@ -920,7 +953,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (!filename.EndsWith(zipExt))
                 filename += zipExt;
 
-            var archivePath = Path.Combine(directoryInfo.FullName, filename);
+            var archivePath = PathHelper.SafelyCombine(directory.FullName, directory.FullName, filename);
             var newFile = new FileSystemFile(archivePath, volume);
 
             if (!await newFile.CanArchiveToAsync())
@@ -979,7 +1012,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (makedir)
             {
-                fromPath = Path.Combine(fromPath, Path.GetFileNameWithoutExtension(targetPath.File.Name));
+                fromPath = PathHelper.SafelyCombine(fromPath, fromPath, Path.GetFileNameWithoutExtension(targetPath.File.Name));
                 fromDir = new FileSystemDirectory(fromPath, volume);
 
                 if (!await fromDir.CanExtractToAsync())
@@ -1005,7 +1038,8 @@ namespace elFinder.Net.Drivers.FileSystem
             {
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
-                    string fullName = PathHelper.GetFullPathNormalized(fromPath, entry.FullName);
+                    string fullName = PathHelper.GetFullPathNormalized(
+                        PathHelper.SafelyCombine(fromPath, fromPath, entry.FullName));
 
                     if (string.IsNullOrEmpty(entry.Name))
                     {
@@ -1100,6 +1134,17 @@ namespace elFinder.Net.Drivers.FileSystem
                         }
                     }
                 }
+            }
+            else if (cmd.Encoding == "hash")
+            {
+                Func<Task<Stream>> openStreamFunc = async () => await cmd.ContentPath.File.OpenReadAsync(cancellationToken: cancellationToken);
+
+                OnBeforeWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                using (var readStream = await openStreamFunc())
+                {
+                    await targetFile.OverwriteAsync(readStream, cancellationToken: cancellationToken);
+                }
+                OnAfterWriteStream?.Invoke(this, (openStreamFunc, targetFile));
             }
             else
             {
@@ -1268,15 +1313,19 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!IsObjectNameValid(cmd.DownloadFileName))
+                throw new InvalidFileNameException();
+
             var archiveFile = await zipDownloadPathProvider.ParseArchiveFileKeyAsync(cmd.ArchiveFileKey);
             var tempFileInfo = new FileInfo(archiveFile);
-            var memStream = new MemoryStream();
 
+            if (!tempFileInfo.Exists) throw new PermissionDeniedException($"Malformed key");
+
+            var memStream = new MemoryStream();
             using (var fileStream = tempFileInfo.OpenRead())
             {
                 await fileStream.CopyToAsync(memStream, StreamConstants.DefaultBufferSize, cancellationToken: cancellationToken);
             }
-
             tempFileInfo.Delete();
             memStream.Position = 0;
 
@@ -1402,6 +1451,11 @@ namespace elFinder.Net.Drivers.FileSystem
             return new FileSystemDirectory(fullPath, volume);
         }
 
+        protected bool IsObjectNameValid(string name)
+        {
+            return name == null || !name.Any(ch => InvalidFileNameChars.Contains(ch));
+        }
+
         protected virtual async Task<IFile> SafeCopyToAsync(IFile file, string newDir,
             IVolume destVolume, bool copyOverwrite = true, string suffix = null,
             CancellationToken cancellationToken = default)
@@ -1410,7 +1464,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (!file.CanCopy()) throw new PermissionDeniedException();
 
-            string newPath = Path.Combine(newDir, file.Name);
+            string newPath = PathHelper.SafelyCombine(newDir, newDir, file.Name);
             IFile newFile = new FileSystemFile(newPath, destVolume);
             var isOverwrite = true;
 
@@ -1419,7 +1473,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 if (!copyOverwrite)
                 {
                     var newName = await newFile.GetCopyNameAsync(suffix, cancellationToken: cancellationToken);
-                    newPath = Path.Combine(newDir, newName);
+                    newPath = PathHelper.SafelyCombine(newDir, newDir, newName);
                     isOverwrite = false;
                 }
             }
@@ -1439,7 +1493,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (!file.CanMove()) throw new PermissionDeniedException();
 
-            string newPath = Path.Combine(newDir, file.Name);
+            string newPath = PathHelper.SafelyCombine(newDir, newDir, file.Name);
             IFile newFile = new FileSystemFile(newPath, destVolume);
 
             if (await newFile.ExistsAsync)
@@ -1447,7 +1501,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 if (!copyOverwrite)
                 {
                     var newName = await newFile.GetCopyNameAsync(suffix, cancellationToken: cancellationToken);
-                    newPath = Path.Combine(newDir, newName);
+                    newPath = PathHelper.SafelyCombine(newDir, newDir, newName);
                 }
                 else
                 {
@@ -1506,7 +1560,8 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
                 {
-                    var newDir = new FileSystemDirectory(Path.Combine(currentNewDest.FullName, dir.Name), directory.Volume);
+                    var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(
+                        currentNewDest.FullName, currentNewDest.FullName, dir.Name), currentNewDest.Volume);
                     queue.Enqueue((dir, newDir));
                 }
 
@@ -1550,7 +1605,8 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
                 {
-                    var newDir = new FileSystemDirectory(Path.Combine(currentNewDest.FullName, dir.Name), srcDir.Volume);
+                    var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(
+                        currentNewDest.FullName, currentNewDest.FullName, dir.Name), currentNewDest.Volume);
                     queue.Enqueue((dir, newDir));
                 }
 
