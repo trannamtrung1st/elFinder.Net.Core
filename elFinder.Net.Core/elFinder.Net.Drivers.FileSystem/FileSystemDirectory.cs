@@ -251,7 +251,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (verify && !this.CanRename()) throw new PermissionDeniedException();
 
-            var newPath = PathHelper.GetFullPath(Parent.FullName, newName);
+            var newPath = PathHelper.GetFullPath(PathHelper.SafelyCombine(Parent.FullName, Parent.FullName, newName));
             directoryInfo.MoveTo(newPath);
             return Task.FromResult<IDirectory>(new FileSystemDirectory(newPath, volume));
         }

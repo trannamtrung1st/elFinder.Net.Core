@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Collections.Generic;
+using System.IO;
 
 namespace elFinder.Net.Demo31
 {
@@ -30,7 +31,7 @@ namespace elFinder.Net.Demo31
             }
 
             path = path.Replace("~/", "").TrimStart('/').Replace('/', '\\');
-            return PathHelper.GetFullPath(basePath, path);
+            return PathHelper.GetFullPath(Path.Combine(basePath, path));
         }
 
         public IConfiguration Configuration { get; }

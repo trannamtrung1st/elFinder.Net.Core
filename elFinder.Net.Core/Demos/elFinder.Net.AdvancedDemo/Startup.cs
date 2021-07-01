@@ -39,7 +39,7 @@ namespace elFinder.Net.AdvancedDemo
             }
 
             path = path.Replace("~/", "").TrimStart('/').Replace('/', '\\');
-            return PathHelper.GetFullPath(basePath, path);
+            return PathHelper.GetFullPath(Path.Combine(basePath, path));
         }
 
         public IConfiguration Configuration { get; }

@@ -1,4 +1,6 @@
-﻿namespace elFinder.Net.Core
+﻿using elFinder.Net.Core.Exceptions;
+
+namespace elFinder.Net.Core
 {
     public class PathInfo
     {
@@ -6,12 +8,16 @@
         {
             File = file;
             FileSystem = file;
+
+            if (!volume.Own(FileSystem)) throw new PermissionDeniedException("Volume must own this path");
         }
 
         public PathInfo(string path, IVolume volume, IDirectory dir, string hashedTarget) : this(path, volume, hashedTarget, true)
         {
             Directory = dir;
             FileSystem = dir;
+
+            if (!volume.Own(FileSystem)) throw new PermissionDeniedException("Volume must own this path");
         }
 
         private PathInfo(string path, IVolume volume, string hashedTarget, bool isDirectory)
