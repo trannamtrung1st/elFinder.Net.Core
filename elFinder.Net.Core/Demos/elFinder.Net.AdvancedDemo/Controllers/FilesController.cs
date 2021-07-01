@@ -5,7 +5,9 @@ using elFinder.Net.AspNetCore.Helper;
 using elFinder.Net.Core;
 using elFinder.Net.Core.Models.Response;
 using elFinder.Net.Core.Models.Result;
+using elFinder.Net.Core.Services.Drawing;
 using elFinder.Net.Drivers.FileSystem.Helpers;
+using elFinder.Net.Drivers.FileSystem.Services;
 using elFinder.Net.Plugins.FileSystemQuotaManagement;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -26,16 +28,25 @@ namespace elFinder.Net.AdvancedDemo.Controllers
     {
         private readonly IConnector _connector;
         private readonly IDriver _driver;
+        private readonly IThumbnailBackgroundGenerator _thumbnailGenerator;
+        private readonly IPictureEditor _pictureEditor;
+        private readonly IVideoEditor _videoEditor;
         private readonly IStorageManager _storageManager;
         private readonly DataContext _dataContext;
 
         public FilesController(IConnector connector,
             IDriver driver,
+            IThumbnailBackgroundGenerator thumbnailGenerator,
+            IPictureEditor pictureEditor,
+            IVideoEditor videoEditor,
             IStorageManager storageManager,
             DataContext dataContext)
         {
             _connector = connector;
             _driver = driver;
+            _thumbnailGenerator = thumbnailGenerator;
+            _pictureEditor = pictureEditor;
+            _videoEditor = videoEditor;
             _storageManager = storageManager;
             _dataContext = dataContext;
         }
@@ -106,6 +117,10 @@ namespace elFinder.Net.AdvancedDemo.Controllers
 
             _connector.AddVolume(volume);
             await _driver.SetupVolumeAsync(volume, cancellationToken);
+
+            // If video thumbnail is used, we may want to run the process in background.
+            // The driver package has a built-in support for this.
+            //_driver.SetupBackgroundThumbnailGenerator(_thumbnailGenerator, _pictureEditor, _videoEditor, cancellationToken: cancellationToken);
 
             // Events
             _driver.OnAfterUpload += (sender, args) =>

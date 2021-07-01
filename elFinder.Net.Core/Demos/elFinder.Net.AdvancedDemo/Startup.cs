@@ -1,7 +1,9 @@
 using elFinder.Net.AdvancedDemo.Models;
+using elFinder.Net.AdvancedDemo.Services;
 using elFinder.Net.AspNetCore.Extensions;
 using elFinder.Net.Core.Extensions;
 using elFinder.Net.Core.Plugins;
+using elFinder.Net.Core.Services.Drawing;
 using elFinder.Net.Drivers.FileSystem.Extensions;
 using elFinder.Net.Drivers.FileSystem.Helpers;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
@@ -52,6 +54,9 @@ namespace elFinder.Net.AdvancedDemo
                 .AddFileSystemQuotaManagement(pluginCollection)
                 .AddElFinderLoggingExample(pluginCollection)
                 .AddElFinderPlugins(pluginCollection);
+
+            // Custom IVideoEditor for generating video thumbnail
+            services.AddSingleton<IVideoEditor, AppVideoEditor>();
 
             services.AddDbContext<DataContext>(options =>
                 options.UseInMemoryDatabase(nameof(DataContext)));

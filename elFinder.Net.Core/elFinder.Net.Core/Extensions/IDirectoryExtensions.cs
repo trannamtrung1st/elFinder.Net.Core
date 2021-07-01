@@ -1,4 +1,5 @@
 ﻿using elFinder.Net.Core.Models.FileInfo;
+using elFinder.Net.Core.Models.Options;
 using System;
 using System.Linq;
 using System.Threading;
@@ -9,9 +10,8 @@ namespace elFinder.Net.Core.Extensions
     public static class IDirectoryExtensions
     {
         public static async Task<BaseInfoResponse> ToFileInfoAsync(this IDirectory directory,
-            string hash,
-            string parentHash,
-            IVolume volume, CancellationToken cancellationToken = default)
+            string hash, string parentHash, IVolume volume,
+            ConnectorOptions connectorOptions, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -33,6 +33,7 @@ namespace elFinder.Net.Core.Extensions
                     locked = volume.IsLocked ? (byte)1 : (byte)0,
                     name = volume.Name,
                     isroot = 1,
+                    options = new ConnectorResponseOptions(directory, connectorOptions.DisabledUICommands, volume.DirectorySeparatorChar)
                 };
             }
             else

@@ -13,6 +13,12 @@
         File = 3,
     }
 
+    public enum MediaType
+    {
+        Image = 1,
+        Video = 2
+    }
+
     public enum MimeDetectOption : byte
     {
         Auto = 0,

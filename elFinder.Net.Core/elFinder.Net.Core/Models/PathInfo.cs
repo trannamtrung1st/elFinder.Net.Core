@@ -1,6 +1,4 @@
-﻿using elFinder.Net.Core.Services.Drawing;
-
-namespace elFinder.Net.Core
+﻿namespace elFinder.Net.Core
 {
     public class PathInfo
     {
@@ -40,13 +38,6 @@ namespace elFinder.Net.Core
         public bool IsDirectory { get; }
 
         public bool IsRoot { get; }
-
-        public bool CanCreateThumbnail(IPictureEditor pictureEditor)
-        {
-            return !string.IsNullOrEmpty(Volume.ThumbnailUrl)
-                && !IsDirectory
-                && pictureEditor.CanProcessFile(File.Extension);
-        }
 
         public override bool Equals(object obj)
         {

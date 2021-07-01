@@ -15,7 +15,9 @@ namespace elFinder.Net.Core
 
         Task<IFile> CopyToAsync(string newDest, IVolume destVolume, bool copyOverwrite, bool verify = true, CancellationToken cancellationToken = default);
 
-        Task<ImageWithMimeType> CreateThumbAsync(string originalPath, int tmbSize, IPictureEditor pictureEditor, bool verify = true, CancellationToken cancellationToken = default);
+        Task<ImageWithMimeType> CreateThumbAsync(IFile file, int tmbSize, IPictureEditor pictureEditor, bool verify = true, CancellationToken cancellationToken = default);
+
+        Task<ImageWithMimeType> CreateThumbAsync(IFile file, int tmbSize, IVideoEditor videoEditor, bool verify = true, CancellationToken cancellationToken = default);
 
         Task<Stream> OpenReadAsync(bool verify = true, CancellationToken cancellationToken = default);
 

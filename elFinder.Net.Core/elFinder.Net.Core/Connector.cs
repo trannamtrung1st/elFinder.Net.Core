@@ -1,6 +1,5 @@
 ﻿using elFinder.Net.Core.Exceptions;
 using elFinder.Net.Core.Extensions;
-using elFinder.Net.Core.Helpers;
 using elFinder.Net.Core.Models.Command;
 using elFinder.Net.Core.Models.Response;
 using elFinder.Net.Core.Models.Result;
@@ -34,17 +33,14 @@ namespace elFinder.Net.Core
         protected readonly ConnectorOptions options;
         protected readonly PluginManager pluginManager;
         protected readonly IPathParser pathParser;
-        protected readonly IPictureEditor pictureEditor;
         protected readonly IConnectorManager connectorManager;
 
         public Connector(ConnectorOptions options, PluginManager pluginManager,
-            IPathParser pathParser, IPictureEditor pictureEditor,
-            IConnectorManager connectorManager)
+            IPathParser pathParser, IConnectorManager connectorManager)
         {
             this.options = options;
             this.pluginManager = pluginManager;
             this.pathParser = pathParser;
-            this.pictureEditor = pictureEditor;
             this.connectorManager = connectorManager;
             Volumes = new List<IVolume>();
         }
@@ -155,7 +151,7 @@ namespace elFinder.Net.Core
 
                                     var rootVolumeDir = volume.Driver.CreateDirectory(volume.RootDirectory, volume);
                                     var hash = rootVolumeDir.GetHash(volume, pathParser);
-                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, volume, cancellationToken));
+                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, volume, Options, cancellationToken: cancellationToken));
                                 }
                             }
 
@@ -635,49 +631,7 @@ namespace elFinder.Net.Core
             {
                 var pathInfo = await ParsePathAsync(target, cancellationToken: cancellationToken);
 
-                if (pathInfo.CanCreateThumbnail(pictureEditor))
-                {
-                    if (!pathInfo.File.CanGetThumb()) return null;
-
-                    var fullName = pathInfo.File.FullName;
-                    var originalFileName = fullName.Substring(0, fullName.LastIndexOf('_'));
-                    var fullPath = $"{originalFileName}{pathInfo.File.Extension}";
-                    var volumeThumbDir = pathInfo.Volume.ThumbnailDirectory;
-                    var separatorChar = pathInfo.Volume.DirectorySeparatorChar;
-
-                    if (volumeThumbDir != null)
-                    {
-                        IFile thumbFile;
-                        if (pathInfo.File.FullName.StartsWith(volumeThumbDir + separatorChar))
-                        {
-                            thumbFile = pathInfo.File;
-                        }
-                        else
-                        {
-                            thumbFile = pathInfo.Volume.Driver.CreateFile($"{volumeThumbDir}{separatorChar}{pathInfo.Path}", pathInfo.Volume);
-                        }
-
-                        if (!await thumbFile.ExistsAsync)
-                        {
-                            var thumb = await thumbFile.CreateThumbAsync(
-                                fullPath, pathInfo.Volume.ThumbnailSize, pictureEditor, cancellationToken: cancellationToken);
-                            thumb.ImageStream.Position = 0;
-                            return thumb;
-                        }
-                        else
-                        {
-                            string mimeType = MimeHelper.GetMimeType(pictureEditor.ConvertThumbnailExtension(thumbFile.Extension));
-                            return new ImageWithMimeType(mimeType, await thumbFile.OpenReadAsync(cancellationToken: cancellationToken));
-                        }
-                    }
-                    else
-                    {
-                        using (var original = await pathInfo.File.OpenReadAsync(cancellationToken: cancellationToken))
-                        {
-                            return pictureEditor.GenerateThumbnail(original, pathInfo.Volume.ThumbnailSize, true);
-                        }
-                    }
-                }
+                return await pathInfo.Volume.Driver.GetThumbAsync(pathInfo, cancellationToken: cancellationToken);
             }
 
             return null;
