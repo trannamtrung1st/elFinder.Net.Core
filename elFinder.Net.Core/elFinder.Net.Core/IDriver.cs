@@ -2,6 +2,7 @@
 using elFinder.Net.Core.Models.Command;
 using elFinder.Net.Core.Models.FileInfo;
 using elFinder.Net.Core.Models.Response;
+using elFinder.Net.Core.Services.Drawing;
 using System;
 using System.IO;
 using System.Threading;
@@ -67,6 +68,11 @@ namespace elFinder.Net.Core
         Task<ResizeResponse> ResizeAsync(ResizeCommand cmd, CancellationToken cancellationToken = default);
         Task<Zipdl1stResponse> ZipdlAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
         Task<FileResponse> ZipdlRawAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
+        Task<ImageWithMimeType> GetThumbAsync(PathInfo target, CancellationToken cancellationToken = default);
+        Task<string> GenerateThumbPathAsync(IFile file, CancellationToken cancellationToken = default);
+        Task<string> GenerateThumbPathAsync(IDirectory directory, CancellationToken cancellationToken = default);
+        Task<(ImageWithMimeType Thumb, IFile ThumbFile, MediaType? MediaType)> CreateThumbAsync(IFile file,
+            bool verify = true, CancellationToken cancellationToken = default);
         Task<PathInfo> ParsePathAsync(string decodedPath, IVolume volume, string hashedTarget,
             bool createIfNotExists = true, bool fileByDefault = true, CancellationToken cancellationToken = default);
         IFile CreateFile(string fullPath, IVolume volume);

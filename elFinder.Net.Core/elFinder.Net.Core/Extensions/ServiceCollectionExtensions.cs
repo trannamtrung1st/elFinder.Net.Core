@@ -36,8 +36,9 @@ namespace elFinder.Net.Core.Extensions
                     options.PollingIntervalInMinutes = ConnectorManagerOptions.DefaultPollingIntervalInMinutes;
                 };
 
-            services.AddScoped<IPathParser, PathParser>()
-               .AddScoped<IPictureEditor, DefaultPictureEditor>()
+            services.AddSingleton<IPathParser, PathParser>()
+               .AddSingleton<IPictureEditor, DefaultPictureEditor>()
+               .AddSingleton<IVideoEditor, DefaultVideoEditor>()
                .AddSingleton<IConnectorManager, ConnectorManager>()
                .Configure(connectorManagerConfig);
 

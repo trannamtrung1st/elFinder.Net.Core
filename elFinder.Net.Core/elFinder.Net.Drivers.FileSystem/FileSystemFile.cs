@@ -156,7 +156,7 @@ namespace elFinder.Net.Drivers.FileSystem
             return Task.CompletedTask;
         }
 
-        public virtual async Task<ImageWithMimeType> CreateThumbAsync(string originalPath, int tmbSize, IPictureEditor pictureEditor,
+        public virtual async Task<ImageWithMimeType> CreateThumbAsync(IFile file, int tmbSize, IPictureEditor pictureEditor,
             bool verify = true, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -164,12 +164,33 @@ namespace elFinder.Net.Drivers.FileSystem
             if (!await Parent.ExistsAsync)
                 await Parent.CreateAsync(verify, cancellationToken: cancellationToken);
 
-            using (var original = File.OpenRead(originalPath))
+            using (var original = await file.OpenReadAsync(verify: false, cancellationToken: cancellationToken))
             {
                 var thumb = pictureEditor.GenerateThumbnail(original, tmbSize, true);
+
+                if (thumb == null) return null;
+
                 await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
+
                 return thumb;
             }
+        }
+
+        public virtual async Task<ImageWithMimeType> CreateThumbAsync(IFile file, int tmbSize, IVideoEditor videoEditor,
+            bool verify = true, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!await Parent.ExistsAsync)
+                await Parent.CreateAsync(verify, cancellationToken: cancellationToken);
+
+            var thumb = await videoEditor.GenerateThumbnailAsync(file, tmbSize, true, cancellationToken: cancellationToken);
+
+            if (thumb == null) return null;
+
+            await OverwriteAsync(thumb.ImageStream, verify, cancellationToken: cancellationToken);
+
+            return thumb;
         }
 
         public virtual Task DeleteAsync(bool verify = true, CancellationToken cancellationToken = default)

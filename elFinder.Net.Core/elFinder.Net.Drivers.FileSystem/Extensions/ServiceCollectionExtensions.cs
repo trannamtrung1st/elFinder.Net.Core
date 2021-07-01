@@ -9,8 +9,9 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
         public static IServiceCollection AddFileSystemDriver(this IServiceCollection services)
         {
             return services.AddScoped<IDriver, FileSystemDriver>()
-                .AddScoped<IZipDownloadPathProvider, TempZipDownloadPathProvider>()
-                .AddScoped<IZipFileArchiver, ZipFileArchiver>();
+                .AddSingleton<IZipDownloadPathProvider, TempZipDownloadPathProvider>()
+                .AddSingleton<IZipFileArchiver, ZipFileArchiver>()
+                .AddSingleton<IThumbnailBackgroundGenerator, DefaultThumbnailBackgroundGenerator>();
         }
     }
 }

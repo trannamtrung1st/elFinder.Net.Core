@@ -6,17 +6,19 @@ namespace elFinder.Net.Core.Models.Options
 {
     public class ConnectorResponseOptions
     {
-        public ConnectorResponseOptions(PathInfo pathInfo, IEnumerable<string> disabled = null, char separator = default)
+        public ConnectorResponseOptions(IDirectory directory, IEnumerable<string> disabled = null, char separator = default)
         {
+            var volume = directory.Volume;
             this.disabled = disabled ?? ConnectorCommand.NotSupportedUICommands;
-            this.separator = separator == default ? pathInfo.Volume.DirectorySeparatorChar : separator;
-            path = pathInfo.Volume.Name;
-            if (pathInfo.Path != string.Empty)
+            this.separator = separator == default ? volume.DirectorySeparatorChar : separator;
+            path = directory.Volume.Name;
+            var relativePath = volume.GetRelativePath(directory);
+            if (relativePath != string.Empty)
             {
-                path += this.separator + pathInfo.Path.Replace(pathInfo.Volume.DirectorySeparatorChar, this.separator);
+                path += this.separator + relativePath.Replace(volume.DirectorySeparatorChar, this.separator);
             }
-            url = pathInfo.Volume.Url ?? string.Empty;
-            tmbUrl = pathInfo.Volume.ThumbnailUrl ?? string.Empty;
+            url = volume.Url ?? string.Empty;
+            tmbUrl = volume.ThumbnailUrl ?? string.Empty;
             var zipMime = MediaTypeNames.Application.Zip;
             archivers = new ArchiveOptions
             {

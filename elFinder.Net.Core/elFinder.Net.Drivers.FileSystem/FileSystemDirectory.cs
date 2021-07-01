@@ -150,10 +150,14 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (search == null) throw new ArgumentNullException(nameof(search));
+
             if (verfify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IDirectory>>(new IDirectory[0]);
 
-            var dirs = directoryInfo.EnumerateDirectories(search, searchOption)
-                .Select(dir => new FileSystemDirectory(dir, volume) as IDirectory);
+            if (!search.Contains('*'))
+                search = '*' + search + '*';
+
+            var dirs = directoryInfo.EnumerateDirectories(search, searchOption).Select(dir => new FileSystemDirectory(dir, volume) as IDirectory);
 
             if (filter != null) dirs = dirs.Where(filter);
             else dirs = dirs.Where(dir => dir.ObjectAttribute.Visible);
@@ -201,7 +205,12 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (search == null) throw new ArgumentNullException(nameof(search));
+
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+
+            if (!search.Contains('*'))
+                search = '*' + search + '*';
 
             var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => new FileSystemFile(f, volume) as IFile);
 
@@ -216,7 +225,12 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (search == null) throw new ArgumentNullException(nameof(search));
+
             if (verify && !ObjectAttribute.Read) return Task.FromResult<IEnumerable<IFile>>(new IFile[0]);
+
+            if (!search.Contains('*'))
+                search = '*' + search + '*';
 
             var files = directoryInfo.EnumerateFiles(search, searchOption).Select(f => new FileSystemFile(f, volume) as IFile);
 

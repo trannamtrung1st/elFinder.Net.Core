@@ -79,7 +79,6 @@
                 elf.getUI('stat').append(info);
             };
             elf.bind('open', function (e, fm) {
-                debugger;
                 fm.getUI().data('_quota', e.data.quota);
                 fm.getUI().data('_usage', e.data.usage);
             }).bind('opendone', elfinderSetVolumeSize);

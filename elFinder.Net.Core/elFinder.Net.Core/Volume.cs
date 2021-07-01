@@ -1,11 +1,6 @@
-﻿using elFinder.Net.Core.Extensions;
-using elFinder.Net.Core.Services;
-using elFinder.Net.Core.Services.Drawing;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace elFinder.Net.Core
 {
@@ -42,9 +37,6 @@ namespace elFinder.Net.Core
         /// Default attribute for files/directories if not any specific object attribute detected. 
         /// </summary>
         ObjectAttribute DefaultObjectAttribute { get; set; }
-        Task<string> GenerateThumbHashAsync(IFile originalImage, IPathParser pathParser, IPictureEditor pictureEditor, CancellationToken cancellationToken = default);
-        Task<string> GenerateThumbPathAsync(IFile originalImage, IPictureEditor pictureEditor, CancellationToken cancellationToken = default);
-        Task<string> GenerateThumbPathAsync(IDirectory directory, CancellationToken cancellationToken = default);
         bool IsRoot(IFileSystem fileSystem);
         bool Own(IFileSystem fileSystem);
         bool Own(string fullPath);
@@ -138,58 +130,6 @@ namespace elFinder.Net.Core
             set { MaxUploadSizeInKb = value.HasValue ? (value * 1024) : null; }
         }
 
-        public virtual async Task<string> GenerateThumbHashAsync(IFile originalImage, IPathParser pathParser, IPictureEditor pictureEditor,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (ThumbnailDirectory == null)
-            {
-                string md5 = await originalImage.GetFileMd5Async(cancellationToken);
-                string thumbName = $"{Path.GetFileNameWithoutExtension(originalImage.Name)}_{md5}{originalImage.Extension}";
-                string relativePath = GetRelativePath(originalImage.DirectoryName);
-                return VolumeId + pathParser.Encode($"{relativePath}{DirectorySeparatorChar}{thumbName}");
-            }
-            else
-            {
-                string thumbPath = await GenerateThumbPathAsync(originalImage, pictureEditor, cancellationToken);
-                string relativePath = thumbPath.Substring(ThumbnailDirectory.Length);
-                return VolumeId + pathParser.Encode(relativePath);
-            }
-        }
-
-        public virtual async Task<string> GenerateThumbPathAsync(IFile originalImage, IPictureEditor pictureEditor,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (ThumbnailDirectory == null
-                || ThumbnailUrl == null
-                || !pictureEditor.CanProcessFile(originalImage.Extension))
-            {
-                return null;
-            }
-            string relativePath = GetRelativePath(originalImage);
-            string thumbDir = GetDirectoryName($"{ThumbnailDirectory}{relativePath}");
-            string md5 = await originalImage.GetFileMd5Async(cancellationToken);
-            string thumbName = $"{Path.GetFileNameWithoutExtension(originalImage.Name)}_{md5}{originalImage.Extension}";
-            return $"{thumbDir}{DirectorySeparatorChar}{thumbName}";
-        }
-
-        public virtual Task<string> GenerateThumbPathAsync(IDirectory directory, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (ThumbnailDirectory == null)
-            {
-                return null;
-            }
-
-            string relativePath = GetRelativePath(directory);
-            string thumbDir = ThumbnailDirectory + relativePath;
-            return Task.FromResult(thumbDir);
-        }
-
         public virtual bool IsRoot(IFileSystem fileSystem)
         {
             return fileSystem.FullName.Length == RootDirectory.Length;
@@ -216,12 +156,6 @@ namespace elFinder.Net.Core
                 ? Url
                 : Url + fullPath.Substring(RootDirectory.Length + 1)
                     .Replace(DirectorySeparatorChar, WebConsts.UrlSegmentSeparator);
-        }
-
-        protected virtual string GetDirectoryName(string file)
-        {
-            var separatorIdx = file.LastIndexOf(DirectorySeparatorChar);
-            return separatorIdx > -1 ? file.Substring(0, separatorIdx) : string.Empty;
         }
 
         public virtual bool Own(IFileSystem fileSystem)

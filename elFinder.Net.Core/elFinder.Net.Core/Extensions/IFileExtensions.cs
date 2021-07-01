@@ -27,27 +27,35 @@ namespace elFinder.Net.Core.Extensions
             return BitConverter.ToString(_md5.ComputeHash(bytes)).Replace("-", string.Empty);
         }
 
-        public static async Task<BaseInfoResponse> ToFileInfoAsync(this IFile file,
-            string parentHash,
-            IVolume volume, IPathParser pathParser, IPictureEditor pictureEditor, CancellationToken cancellationToken = default)
+        public static async Task<BaseInfoResponse> ToFileInfoAsync(this IFile file, string parentHash,
+            IVolume volume, IPathParser pathParser, IPictureEditor pictureEditor, IVideoEditor videoEditor,
+            CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (file == null) throw new ArgumentNullException(nameof(file));
             if (volume == null) throw new ArgumentNullException(nameof(volume));
 
-            string relativePath = volume.GetRelativePath(file);
+            var fHash = file.GetHash(volume, pathParser);
             var fileLength = await file.LengthAsync;
 
             FileInfoResponse response;
 
-            if (volume.ThumbnailUrl != null
-                && pictureEditor.CanProcessFile(file.Extension) && fileLength > 0
-                && file.ObjectAttribute.Read)
+            if (volume.ThumbnailUrl != null && fileLength > 0 && file.ObjectAttribute.Read)
             {
-                var imgResponse = new ImageInfoResponse();
-                response = imgResponse;
-                imgResponse.tmb = await volume.GenerateThumbHashAsync(file, pathParser, pictureEditor, cancellationToken);
+                if (pictureEditor.CanProcessFile(file.Extension))
+                {
+                    var imgResponse = new ImageInfoResponse();
+                    response = imgResponse;
+                    imgResponse.tmb = fHash;
+                }
+                else if (videoEditor.CanProcessFile(file.Extension))
+                {
+                    var vidResponse = new VideoInfoResponse();
+                    response = vidResponse;
+                    vidResponse.tmb = fHash;
+                }
+                else response = new FileInfoResponse();
             }
             else response = new FileInfoResponse();
 
@@ -58,7 +66,7 @@ namespace elFinder.Net.Core.Extensions
             response.size = fileLength;
             response.ts = new DateTimeOffset(await file.LastWriteTimeUtcAsync).ToUnixTimeSeconds();
             response.mime = MimeHelper.GetMimeType(file.Extension);
-            response.hash = volume.VolumeId + pathParser.Encode(relativePath);
+            response.hash = fHash;
             response.phash = parentHash;
             return response;
         }
@@ -90,9 +98,18 @@ namespace elFinder.Net.Core.Extensions
             return objAttr;
         }
 
-        public static bool CanGetThumb(this IFile file)
+        public static MediaType? CanGetThumb(this IFile file, IPictureEditor pictureEditor, IVideoEditor videoEditor,
+            bool verify = true)
         {
-            return file.ObjectAttribute.Read;
+            if (verify && !file.ObjectAttribute.Read) return null;
+
+            if (pictureEditor.CanProcessFile(file.Extension))
+                return MediaType.Image;
+
+            if (videoEditor.CanProcessFile(file.Extension))
+                return MediaType.Video;
+
+            return null;
         }
     }
 }
