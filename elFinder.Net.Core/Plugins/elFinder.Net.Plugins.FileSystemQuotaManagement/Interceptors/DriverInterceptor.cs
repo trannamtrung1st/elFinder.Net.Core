@@ -305,9 +305,48 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
         protected virtual void InterceptRm(IInvocation invocation, QuotaOptions quotaOptions)
         {
             var driver = invocation.InvocationTarget as IDriver;
-            var rmCmd = invocation.Arguments[0] as RmCommand;
-            var volume = rmCmd.TargetPaths.Select(o => o.Volume).First();
-            var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
+            var cmd = invocation.Arguments[0] as RmCommand;
+            var cancellationToken = (CancellationToken)invocation.Arguments.Last();
+            var proceededDirs = new HashSet<IDirectory>();
+
+            if (!_registeredHandlers.Contains(nameof(InterceptRm)))
+            {
+                _registeredHandlers.Add(nameof(InterceptRm));
+
+                long? rmLength = null;
+
+                driver.OnBeforeRemove += (sender, args) =>
+                {
+                    if (args is IFile file)
+                    {
+                        rmLength = file.LengthAsync.Result;
+                    }
+                };
+
+                driver.OnAfterRemove += (sender, args) =>
+                {
+                    if (args is IFile file)
+                    {
+                        var volume = file.Volume;
+                        var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
+                        Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                        var (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                        try
+                        {
+                            storageCache.Storage -= rmLength.Value;
+                            rmLength = null;
+                            proceededDirs.Add(volumeDir);
+                        }
+                        finally
+                        {
+                            if (storageCache != null)
+                                storageManager.Unlock(storageCache);
+                        }
+                    }
+                };
+            }
 
             try
             {
@@ -315,7 +354,8 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             }
             finally
             {
-                storageManager.StartSizeCalculationThread(volumeDir);
+                foreach (var dir in proceededDirs)
+                    storageManager.StartSizeCalculationThread(dir);
             }
         }
 
