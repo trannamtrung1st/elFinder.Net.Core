@@ -370,6 +370,8 @@ namespace elFinder.Net.Drivers.FileSystem
                     throw new InvalidDirNameException();
                 else throw new InvalidFileNameException();
 
+            await RemoveThumbsAsync(targetPath, cancellationToken: cancellationToken);
+
             if (targetPath.IsDirectory)
             {
                 var prevName = targetPath.Directory.Name;
@@ -395,7 +397,6 @@ namespace elFinder.Net.Drivers.FileSystem
             }
 
             renameResp.removed.Add(targetPath.HashedTarget);
-            await RemoveThumbsAsync(targetPath, cancellationToken: cancellationToken);
 
             return renameResp;
         }
@@ -408,6 +409,8 @@ namespace elFinder.Net.Drivers.FileSystem
 
             foreach (var path in cmd.TargetPaths)
             {
+                await RemoveThumbsAsync(path, cancellationToken: cancellationToken);
+
                 if (path.IsDirectory)
                 {
                     if (await path.Directory.ExistsAsync)
@@ -423,8 +426,6 @@ namespace elFinder.Net.Drivers.FileSystem
                     await path.File.DeleteAsync(cancellationToken: cancellationToken);
                     OnAfterRemove?.Invoke(this, path.File);
                 }
-
-                await RemoveThumbsAsync(path, cancellationToken: cancellationToken);
 
                 rmResp.removed.Add(path.HashedTarget);
             }
@@ -783,6 +784,8 @@ namespace elFinder.Net.Drivers.FileSystem
 
                     if (isCut)
                     {
+                        await RemoveThumbsAsync(src, cancellationToken: cancellationToken);
+
                         if (exists)
                         {
                             OnBeforeMove?.Invoke(this, (src.Directory, newDest, true));
@@ -798,8 +801,6 @@ namespace elFinder.Net.Drivers.FileSystem
                             pastedDir = await src.Directory.MoveToAsync(newDest, dstVolume, cancellationToken: cancellationToken);
                             OnAfterMove?.Invoke(this, (src.Directory, pastedDir, false));
                         }
-
-                        await RemoveThumbsAsync(src, cancellationToken: cancellationToken);
 
                         pasteResp.removed.Add(src.HashedTarget);
                     }
@@ -845,9 +846,11 @@ namespace elFinder.Net.Drivers.FileSystem
 
                     if (isCut)
                     {
+                        await RemoveThumbsAsync(src, cancellationToken: cancellationToken);
+
                         pastedFile = await SafeMoveToAsync(file, dstPath.Directory.FullName,
                             dstVolume, dstVolume.CopyOverwrite, cancellationToken: cancellationToken);
-                        await RemoveThumbsAsync(src, cancellationToken: cancellationToken);
+
                         pasteResp.removed.Add(src.HashedTarget);
                     }
                     else
