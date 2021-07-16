@@ -38,7 +38,7 @@ namespace elFinder.Net.AdvancedDemo
         public static string MapStoragePath(string path)
         {
             path = path.Replace("~/", "").TrimStart('/').Replace('/', '\\');
-            return PathHelper.GetFullPath(Path.Combine(StoragePath, path));
+            return PathHelper.GetFullPath(PathHelper.SafelyCombine(StoragePath, StoragePath, path));
         }
 
         public IConfiguration Configuration { get; }
