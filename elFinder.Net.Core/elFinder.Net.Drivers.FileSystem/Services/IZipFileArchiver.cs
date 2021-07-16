@@ -1,5 +1,6 @@
 ﻿using elFinder.Net.Core;
 using elFinder.Net.Core.Exceptions;
+using elFinder.Net.Core.Extensions;
 using elFinder.Net.Drivers.FileSystem.Extensions;
 using System.Collections.Generic;
 using System.IO;

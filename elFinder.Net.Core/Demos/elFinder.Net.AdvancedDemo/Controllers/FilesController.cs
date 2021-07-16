@@ -7,7 +7,6 @@ using elFinder.Net.Core.Models.Response;
 using elFinder.Net.Core.Models.Result;
 using elFinder.Net.Core.Services.Drawing;
 //using elFinder.Net.Drivers.FileSystem.Extensions;
-using elFinder.Net.Drivers.FileSystem.Helpers;
 using elFinder.Net.Drivers.FileSystem.Services;
 using elFinder.Net.Plugins.FileSystemQuotaManagement;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
@@ -73,6 +72,16 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             return actionResult;
         }
 
+        [Route("storage/{**path}")]
+        public async Task<IActionResult> GetFile(string path)
+        {
+            await SetupConnectorAsync(HttpContext.RequestAborted);
+
+            var fullPath = Startup.MapStoragePath(path);
+
+            return await this.GetPhysicalFileAsync(_connector, fullPath, HttpContext.RequestAborted);
+        }
+
         private void CustomizeResponse(ConnectorResult connectorResult, IVolume volume, long quota)
         {
             var storageCache = _storageManager.GetOrCreateDirectoryStorage(volume.RootDirectory,
@@ -110,10 +119,11 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             _connector.PluginManager.Features[typeof(QuotaOptions)] = quotaOptions;
 
             // Volume initialization
-            var volume = new Volume(_driver, Startup.MapPath($"~/upload/{volumePath}"), $"/upload/{volumePath}/", $"/api/files/thumb/")
+            var volume = new Volume(_driver, Startup.MapStoragePath($"./upload/{volumePath}"),
+                $"/api/files/storage/upload/{volumePath}/", $"/api/files/thumb/")
             {
                 Name = "My volume",
-                ThumbnailDirectory = PathHelper.GetFullPath($"./thumb/{volumePath}")
+                ThumbnailDirectory = Startup.MapStoragePath($"./thumb/{volumePath}")
             };
 
             _connector.AddVolume(volume);

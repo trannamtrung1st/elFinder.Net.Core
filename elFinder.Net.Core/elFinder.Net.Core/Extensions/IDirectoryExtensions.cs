@@ -81,5 +81,10 @@ namespace elFinder.Net.Core.Extensions
 
             return objAttr;
         }
+
+        public static bool CanCreateObject(this IDirectory dir)
+        {
+            return dir.ObjectAttribute.Write;
+        }
     }
 }

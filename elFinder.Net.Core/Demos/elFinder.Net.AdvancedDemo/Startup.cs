@@ -23,23 +23,22 @@ namespace elFinder.Net.AdvancedDemo
 {
     public class Startup
     {
+        public const string StorageFolder = ".storage";
+
         public Startup(IConfiguration configuration, IWebHostEnvironment env)
         {
             Configuration = configuration;
             WebRootPath = env.WebRootPath;
+            StoragePath = new DirectoryInfo(StorageFolder).FullName;
         }
 
         public static string WebRootPath { get; private set; }
+        public static string StoragePath { get; private set; }
 
-        public static string MapPath(string path, string basePath = null)
+        public static string MapStoragePath(string path)
         {
-            if (string.IsNullOrEmpty(basePath))
-            {
-                basePath = WebRootPath;
-            }
-
             path = path.Replace("~/", "").TrimStart('/').Replace('/', '\\');
-            return PathHelper.GetFullPath(Path.Combine(basePath, path));
+            return PathHelper.GetFullPath(Path.Combine(StoragePath, path));
         }
 
         public IConfiguration Configuration { get; }
@@ -88,7 +87,7 @@ namespace elFinder.Net.AdvancedDemo
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            Directory.CreateDirectory(MapPath("~/upload"));
+            Directory.CreateDirectory(MapStoragePath("./upload"));
 
             if (env.IsDevelopment())
             {

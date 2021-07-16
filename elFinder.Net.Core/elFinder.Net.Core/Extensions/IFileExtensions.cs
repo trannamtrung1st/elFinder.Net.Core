@@ -111,5 +111,23 @@ namespace elFinder.Net.Core.Extensions
 
             return null;
         }
+
+        public static bool CanExtract(this IFile file)
+        {
+            return file.ObjectAttribute.Access;
+        }
+
+        public static bool CanEditImage(this IFile file)
+        {
+            return file.ObjectAttribute.Read && file.ObjectAttribute.Write;
+        }
+
+        public static async Task<bool> CanArchiveToAsync(this IFile destination)
+        {
+            if (await destination.ExistsAsync)
+                return destination.ObjectAttribute.Write;
+
+            return destination.Parent?.ObjectAttribute.Write != false;
+        }
     }
 }
