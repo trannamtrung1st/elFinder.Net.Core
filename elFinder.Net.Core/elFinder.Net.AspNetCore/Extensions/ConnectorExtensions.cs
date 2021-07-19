@@ -24,7 +24,8 @@ namespace elFinder.Net.AspNetCore.Extensions
             if (!file.CanDownload())
                 return controller.Forbid();
 
-            return controller.File(await file.OpenReadAsync(cancellationToken: cancellationToken), file.MimeType);
+            return controller.File(await file.OpenReadAsync(cancellationToken: cancellationToken), file.MimeType,
+                enableRangeProcessing: true);
         }
     }
 }
