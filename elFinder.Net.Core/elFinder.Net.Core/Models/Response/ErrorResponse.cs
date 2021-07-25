@@ -19,6 +19,14 @@ namespace elFinder.Net.Core.Models.Response
 
         public static class Factory
         {
+            public static ErrorResponse ConnectionAborted(Exception ex)
+            {
+                return new ErrorResponse(ex)
+                {
+                    error = ErrorResponse.ConnectionAborted
+                };
+            }
+
             public static ErrorResponse AccessDenied(Exception ex)
             {
                 return new ErrorResponse(ex)
@@ -78,6 +86,7 @@ namespace elFinder.Net.Core.Models.Response
         public const string FileNotFound = "errFileNotFound";
         public const string FolderNotFound = "errFolderNotFound";
         public const string CommandParams = "errCmdParams";
+        public const string ConnectionAborted = "errAbort";
         public const string Unknown = "errUnknown";
         public const string PermissionDenied = "errPerm";
         public const string UploadFileSize = "errUploadFileSize";

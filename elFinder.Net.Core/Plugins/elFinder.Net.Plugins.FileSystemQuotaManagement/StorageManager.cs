@@ -27,7 +27,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
         public DateTimeOffset? LastAccessTime { get; set; }
     }
 
-    public interface IStorageManager
+    public interface IStorageManager : IDisposable
     {
         (long Storage, bool IsInit) GetOrCreateDirectoryStorage(string dir, Func<string, Task<long>> createFunc);
         bool RemoveDirectoryStorage(string dir);
@@ -41,10 +41,14 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
         protected readonly ConcurrentDictionary<string, DirectoryStorageCache> directoryStorageCaches;
         protected readonly IOptionsMonitor<StorageManagerOptions> options;
 
+        private bool _disposedValue;
+        private readonly CancellationTokenSource _tokenSource;
+
         public StorageManager(IOptionsMonitor<StorageManagerOptions> options)
         {
             this.options = options;
             directoryStorageCaches = new ConcurrentDictionary<string, DirectoryStorageCache>();
+            _tokenSource = new CancellationTokenSource();
             StartCachesCleaner();
         }
 
@@ -163,22 +167,17 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
 
         protected virtual void StartCachesCleaner()
         {
-            var expiredTimespan = TimeSpan.FromMinutes(options.CurrentValue.StorageCachingMinutes);
-            var running = true;
-
             Thread thread = new Thread(() =>
             {
-                while (running)
+                while (!_tokenSource.IsCancellationRequested)
                 {
-                    var sleepMins = options.CurrentValue.PollingIntervalInMinutes == 0 ?
-                        StorageManagerOptions.DefaultPollingIntervalInMinutes : options.CurrentValue.PollingIntervalInMinutes;
-
-                    Thread.Sleep(TimeSpan.FromMinutes(sleepMins));
+                    Thread.Sleep(options.CurrentValue.PollingInterval);
+                    _tokenSource.Token.ThrowIfCancellationRequested();
 
                     var expiredCaches = directoryStorageCaches.Where(cache =>
                     {
                         var lifeTime = DateTimeOffset.UtcNow - cache.Value.LastAccessTime;
-                        return lifeTime >= expiredTimespan;
+                        return lifeTime >= options.CurrentValue.StorageCachingLifeTime;
                     }).ToArray();
 
                     foreach (var cache in expiredCaches)
@@ -190,6 +189,37 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement
 
             thread.IsBackground = true;
             thread.Start();
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                    _tokenSource.Cancel();
+                    _tokenSource.Dispose();
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                _disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~StorageManager()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

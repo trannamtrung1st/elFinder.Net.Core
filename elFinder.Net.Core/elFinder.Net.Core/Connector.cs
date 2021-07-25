@@ -26,6 +26,7 @@ namespace elFinder.Net.Core
         Task<IEnumerable<PathInfo>> ParsePathsAsync(IEnumerable<string> targets, CancellationToken cancellationToken = default);
         Task<ImageWithMimeType> GetThumbAsync(string target, CancellationToken cancellationToken = default);
         string AddVolume(IVolume volume);
+        Task AbortAsync(RequestCommand cmd, CancellationToken cancellationToken = default);
     }
 
     public class Connector : IConnector
@@ -61,14 +62,14 @@ namespace elFinder.Net.Core
             var hasReqId = !string.IsNullOrEmpty(cmd.ReqId);
 
             if (hasReqId)
-                connectorManager.AddCancellationTokenSource(cmd.ReqId, cancellationTokenSource);
+                connectorManager.AddCancellationTokenSource(new RequestCommand(cmd), cancellationTokenSource);
 
             var cookies = new Dictionary<string, string>();
             var connResult = await ProcessCoreAsync(cmd, cookies, cancellationToken);
             connResult.Cookies = cookies;
 
             if (hasReqId)
-                connectorManager.Release(cmd.ReqId);
+                connectorManager.ReleaseRequest(cmd.ReqId);
 
             return connResult;
         }
@@ -101,7 +102,12 @@ namespace elFinder.Net.Core
                             var abortCmd = new AbortCommand();
                             abortCmd.Id = args.GetValueOrDefault(ConnectorCommand.Param_Id);
 
-                            var success = await connectorManager.AbortAsync(abortCmd.Id, cancellationToken);
+                            var (success, reqCmd) = await connectorManager.AbortAsync(abortCmd.Id, cancellationToken: cancellationToken);
+
+                            if (success)
+                            {
+                                await AbortAsync(reqCmd, cancellationToken: cancellationToken);
+                            }
 
                             //return ConnectorResult.NoContent(new AbortResponse { success = success });
                             return ConnectorResult.Success(new AbortResponse
@@ -129,7 +135,7 @@ namespace elFinder.Net.Core
                             openCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
                             openCmd.TargetPath = await ParsePathAsync(openCmd.Target, createIfNotExists: false, cancellationToken: cancellationToken);
                             openCmd.Mimes = options.MimeDetect == MimeDetectOption.Internal
-                                ? args.GetValueOrDefault(ConnectorCommand.Param_Mimes)
+                                ? args.GetValueOrDefault(ConnectorCommand.Param_MimesArr)
                                 : default;
                             if (byte.TryParse(args.GetValueOrDefault(ConnectorCommand.Param_Init), out var init))
                                 openCmd.Init = init;
@@ -354,7 +360,7 @@ namespace elFinder.Net.Core
                             lsCmd.TargetPath = await ParsePathAsync(lsCmd.Target, cancellationToken: cancellationToken);
                             lsCmd.Intersect = args.GetValueOrDefault(ConnectorCommand.Param_Intersect);
                             lsCmd.Mimes = options.MimeDetect == MimeDetectOption.Internal
-                                ? args.GetValueOrDefault(ConnectorCommand.Param_Mimes)
+                                ? args.GetValueOrDefault(ConnectorCommand.Param_MimesArr)
                                 : default;
                             cmd.CmdObject = lsCmd;
 
@@ -473,7 +479,7 @@ namespace elFinder.Net.Core
                             searchCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
                             searchCmd.TargetPath = await ParsePathAsync(searchCmd.Target, cancellationToken: cancellationToken);
                             searchCmd.Q = args.GetValueOrDefault(ConnectorCommand.Param_Q);
-                            searchCmd.Mimes = args.GetValueOrDefault(ConnectorCommand.Param_Mimes);
+                            searchCmd.Mimes = args.GetValueOrDefault(ConnectorCommand.Param_MimesArr);
                             cmd.CmdObject = searchCmd;
 
                             SearchResponse finalSearchResp;
@@ -499,12 +505,15 @@ namespace elFinder.Net.Core
 
                             return ConnectorResult.Success(finalSearchResp);
                         }
+
+                    // Remember to update AbortAsync
                     case ConnectorCommand.Cmd_Upload:
                         {
                             var uploadCmd = new UploadCommand();
                             uploadCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
                             uploadCmd.TargetPath = await ParsePathAsync(uploadCmd.Target, cancellationToken: cancellationToken);
-                            uploadCmd.Upload = cmd.Files.Where(o => o.Name == ConnectorCommand.Param_Upload);
+                            uploadCmd.Mimes = args.GetValueOrDefault(ConnectorCommand.Param_Mimes);
+                            uploadCmd.Upload = cmd.Files.Where(o => o.Name == ConnectorCommand.Param_Upload).ToArray();
                             uploadCmd.UploadPath = args.GetValueOrDefault(ConnectorCommand.Param_UploadPath);
                             uploadCmd.UploadPathInfos = await ParsePathsAsync(uploadCmd.UploadPath, cancellationToken);
                             uploadCmd.MTime = args.GetValueOrDefault(ConnectorCommand.Param_MTime);
@@ -515,17 +524,44 @@ namespace elFinder.Net.Core
                                 .ToDictionary(o => o.Key, o => (string)o.Value);
                             if (byte.TryParse(args.GetValueOrDefault(ConnectorCommand.Param_Overwrite), out var overwrite))
                                 uploadCmd.Overwrite = overwrite;
+
+                            // Chunked upload processing
+                            uploadCmd.UploadName = args.GetValueOrDefault(ConnectorCommand.Param_Upload);
+                            uploadCmd.Chunk = args.GetValueOrDefault(ConnectorCommand.Param_Chunk);
+                            uploadCmd.Range = args.GetValueOrDefault(ConnectorCommand.Param_Range);
+                            uploadCmd.Cid = args.GetValueOrDefault(ConnectorCommand.Param_Cid);
+                            var isChunking = uploadCmd.Chunk.ToString().Length > 0;
+                            var isChunkMerge = isChunking && uploadCmd.Cid.ToString().Length == 0;
+                            var uploadCount = uploadCmd.Upload.Count();
+
                             cmd.CmdObject = uploadCmd;
                             var volume = uploadCmd.TargetPath.Volume;
+
+                            if (uploadCmd.UploadPathInfos.Any(path => path.Volume != volume))
+                                throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+
+                            if (uploadCmd.UploadName == UploadCommand.ChunkFail && uploadCmd.Mimes == UploadCommand.ChunkFail)
+                            {
+                                await volume.Driver.AbortUploadAsync(uploadCmd, cancellationToken);
+                                throw new ConnectionAbortedException();
+                            }
+                            else if (isChunking && !isChunkMerge
+                                    && (uploadCmd.Upload.Count() != 1 || uploadCmd.UploadPathInfos.Count() != 1
+                                        || uploadCmd.Upload.Single().Length > uploadCmd.RangeInfo.TotalBytes))
+                            {
+                                throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+                            }
+                            else if (isChunkMerge && (string.IsNullOrWhiteSpace(uploadCmd.UploadName)
+                                    || string.IsNullOrWhiteSpace(uploadCmd.Chunk)))
+                            {
+                                throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+                            }
 
                             if (volume.MaxUploadSize.HasValue)
                             {
                                 if (uploadCmd.Upload.Any(file => file.Length > volume.MaxUploadSize))
                                     throw new UploadFileSizeException();
                             }
-
-                            if (uploadCmd.UploadPathInfos.Any(path => path.Volume != volume))
-                                throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
 
                             var uploadResp = await volume.Driver.UploadAsync(uploadCmd, cancellationToken);
                             return ConnectorResult.Success(uploadResp);
@@ -575,10 +611,6 @@ namespace elFinder.Net.Core
                 {
                     errResp = ErrorResponse.Factory.AccessDenied(uaEx);
                 }
-                else if (rootCause is IOException ioEx)
-                {
-                    errResp = ErrorResponse.Factory.AccessDenied(ioEx);
-                }
                 else if (rootCause is FileNotFoundException fnfEx)
                 {
                     errResp = ErrorResponse.Factory.FileNotFound(fnfEx);
@@ -586,6 +618,18 @@ namespace elFinder.Net.Core
                 else if (rootCause is DirectoryNotFoundException dnfEx)
                 {
                     errResp = ErrorResponse.Factory.FolderNotFound(dnfEx);
+                }
+                else if (rootCause is TaskCanceledException taskEx)
+                {
+                    errResp = ErrorResponse.Factory.ConnectionAborted(taskEx);
+                }
+                else if (rootCause is OperationCanceledException opEx)
+                {
+                    errResp = ErrorResponse.Factory.ConnectionAborted(opEx);
+                }
+                else if (rootCause is IOException ioEx)
+                {
+                    errResp = ErrorResponse.Factory.AccessDenied(ioEx);
                 }
                 else if (rootCause is ArgumentException argEx)
                 {
@@ -598,6 +642,8 @@ namespace elFinder.Net.Core
                 }
             }
 
+            // If the error response is returned too fast, elFinder client will be likely to miss it.
+            Thread.Sleep(options.DefaultErrResponseTimeoutMs);
             return ConnectorResult.Error(errResp, errSttCode);
         }
 
@@ -651,6 +697,78 @@ namespace elFinder.Net.Core
             var tasks = targets.Select(async t => await ParsePathAsync(t, cancellationToken: cancellationToken));
 
             return await Task.WhenAll(tasks);
+        }
+
+        public async Task AbortAsync(RequestCommand cmd, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (cmd == null) throw new ArgumentNullException(nameof(cmd));
+            if (cmd.Args == null) throw new ArgumentNullException(nameof(cmd.Args));
+
+            if (options.EnabledCommands?.Contains(cmd.Cmd) == false) throw new CommandNoSupportException();
+
+            var args = cmd.Args;
+            cmd.Cmd = args.GetValueOrDefault(ConnectorCommand.Param_Cmd);
+
+            if (string.IsNullOrEmpty(cmd.Cmd))
+                throw new CommandRequiredException();
+
+            switch (cmd.Cmd)
+            {
+                case ConnectorCommand.Cmd_Upload:
+                    {
+                        var uploadCmd = new UploadCommand();
+                        uploadCmd.Target = args.GetValueOrDefault(ConnectorCommand.Param_Target);
+                        uploadCmd.TargetPath = await ParsePathAsync(uploadCmd.Target, cancellationToken: cancellationToken);
+                        uploadCmd.Mimes = args.GetValueOrDefault(ConnectorCommand.Param_Mimes);
+                        uploadCmd.UploadPath = args.GetValueOrDefault(ConnectorCommand.Param_UploadPath);
+                        uploadCmd.UploadPathInfos = await ParsePathsAsync(uploadCmd.UploadPath, cancellationToken);
+                        uploadCmd.MTime = args.GetValueOrDefault(ConnectorCommand.Param_MTime);
+                        uploadCmd.Name = args.GetValueOrDefault(ConnectorCommand.Param_Names);
+                        uploadCmd.Renames = args.GetValueOrDefault(ConnectorCommand.Param_Renames);
+                        uploadCmd.Suffix = args.GetValueOrDefault(ConnectorCommand.Param_Suffix);
+                        uploadCmd.Hashes = args.Where(kvp => kvp.Key.StartsWith(ConnectorCommand.Param_Hashes_Start))
+                            .ToDictionary(o => o.Key, o => (string)o.Value);
+                        if (byte.TryParse(args.GetValueOrDefault(ConnectorCommand.Param_Overwrite), out var overwrite))
+                            uploadCmd.Overwrite = overwrite;
+
+                        // Chunked upload processing
+                        uploadCmd.UploadName = args.GetValueOrDefault(ConnectorCommand.Param_Upload);
+                        uploadCmd.Chunk = args.GetValueOrDefault(ConnectorCommand.Param_Chunk);
+                        uploadCmd.Range = args.GetValueOrDefault(ConnectorCommand.Param_Range);
+                        uploadCmd.Cid = args.GetValueOrDefault(ConnectorCommand.Param_Cid);
+                        var isChunking = uploadCmd.Chunk.ToString().Length > 0;
+                        var isChunkMerge = isChunking && uploadCmd.Cid.ToString().Length == 0;
+                        var uploadCount = uploadCmd.Upload.Count();
+
+                        if (uploadCmd.UploadName == UploadCommand.ChunkFail && uploadCmd.Mimes == UploadCommand.ChunkFail)
+                        {
+                            return;
+                        }
+
+                        if (isChunking && !isChunkMerge && uploadCmd.UploadPathInfos.Count() != 1)
+                            throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+
+                        if (isChunkMerge && (string.IsNullOrWhiteSpace(uploadCmd.UploadName)
+                            || string.IsNullOrWhiteSpace(uploadCmd.Chunk)))
+                            throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+
+                        var volume = uploadCmd.TargetPath.Volume;
+
+                        if (volume.MaxUploadSize.HasValue)
+                        {
+                            if (uploadCmd.Upload.Any(file => file.Length > volume.MaxUploadSize))
+                                throw new UploadFileSizeException();
+                        }
+
+                        if (uploadCmd.UploadPathInfos.Any(path => path.Volume != volume))
+                            throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
+
+                        await volume.Driver.AbortUploadAsync(uploadCmd, cancellationToken);
+                        return;
+                    }
+            }
         }
     }
 }

@@ -13,6 +13,9 @@ namespace elFinder.Net.Core
     public interface IDriver
     {
         #region Events
+        event EventHandler<PathInfo> OnBeforeRemoveThumb;
+        event EventHandler<PathInfo> OnAfterRemoveThumb;
+        event EventHandler<Exception> OnRemoveThumbError;
         event EventHandler<IDirectory> OnBeforeMakeDir;
         event EventHandler<IDirectory> OnAfterMakeDir;
         event EventHandler<IFile> OnBeforeMakeFile;
@@ -21,8 +24,14 @@ namespace elFinder.Net.Core
         event EventHandler<(IFileSystem FileSystem, string PrevName)> OnAfterRename;
         event EventHandler<IFileSystem> OnBeforeRemove;
         event EventHandler<IFileSystem> OnAfterRemove;
-        event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnBeforeUpload;
-        event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnAfterUpload;
+        event EventHandler<IFileSystem> OnBeforeRollbackChunk;
+        event EventHandler<IFileSystem> OnAfterRollbackChunk;
+        event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnBeforeUpload;
+        event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnAfterUpload;
+        event EventHandler<(IFile File, bool IsOverwrite)> OnBeforeChunkMerged;
+        event EventHandler<(IFile File, bool IsOverwrite)> OnAfterChunkMerged;
+        event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnBeforeChunkTransfer;
+        event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnAfterChunkTransfer;
         event EventHandler<Exception> OnUploadError;
         event EventHandler<(IFileSystem FileSystem, string NewDest, bool IsOverwrite)> OnBeforeMove;
         event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterMove;
@@ -65,6 +74,7 @@ namespace elFinder.Net.Core
         Task<TreeResponse> TreeAsync(TreeCommand cmd, CancellationToken cancellationToken = default);
         Task<SearchResponse> SearchAsync(SearchCommand cmd, CancellationToken cancellationToken = default);
         Task<UploadResponse> UploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
+        Task AbortUploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default);
         Task<ResizeResponse> ResizeAsync(ResizeCommand cmd, CancellationToken cancellationToken = default);
         Task<Zipdl1stResponse> ZipdlAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);
         Task<FileResponse> ZipdlRawAsync(ZipdlCommand cmd, CancellationToken cancellationToken = default);

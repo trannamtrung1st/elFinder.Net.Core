@@ -32,15 +32,16 @@ namespace elFinder.Net.Core.Extensions
                 connectorManagerConfig = (options) =>
                 {
                     options.MaximumItems = ConnectorManagerOptions.DefaultMaximumItems;
-                    options.TokenSourceCachingMinutes = ConnectorManagerOptions.DefaultCcTokenSourceCachingMinutes;
-                    options.PollingIntervalInMinutes = ConnectorManagerOptions.DefaultPollingIntervalInMinutes;
+                    options.TokenSourceCachingLifeTime = ConnectorManagerOptions.DefaultCcTokenSourceCachingLifeTime;
+                    options.LockCachingLifeTime = ConnectorManagerOptions.DefaultLockCachingLifeTime;
+                    options.PollingInterval = ConnectorManagerOptions.DefaultPollingInterval;
                 };
 
             services.AddSingleton<IPathParser, PathParser>()
-               .AddSingleton<IPictureEditor, DefaultPictureEditor>()
-               .AddSingleton<IVideoEditor, DefaultVideoEditor>()
-               .AddSingleton<IConnectorManager, ConnectorManager>()
-               .Configure(connectorManagerConfig);
+                .AddSingleton<IPictureEditor, DefaultPictureEditor>()
+                .AddSingleton<IVideoEditor, DefaultVideoEditor>()
+                .AddSingleton<IConnectorManager, ConnectorManager>()
+                .Configure(connectorManagerConfig);
 
             return services.AddScoped<IConnector, Connector>()
                 .AddScoped<ConnectorOptions>()

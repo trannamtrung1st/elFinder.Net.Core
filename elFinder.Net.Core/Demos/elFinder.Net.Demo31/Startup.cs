@@ -2,6 +2,7 @@ using elFinder.Net.AspNetCore.Extensions;
 using elFinder.Net.Core;
 using elFinder.Net.Drivers.FileSystem.Extensions;
 using elFinder.Net.Drivers.FileSystem.Helpers;
+using elFinder.Net.Drivers.FileSystem.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -22,6 +23,7 @@ namespace elFinder.Net.Demo31
         }
 
         public static string WebRootPath { get; private set; }
+        public static string TempPath { get; } = Path.GetTempPath();
 
         public static string MapPath(string path, string basePath = null)
         {
@@ -41,7 +43,10 @@ namespace elFinder.Net.Demo31
         {
             #region elFinder
             services.AddElFinderAspNetCore()
-                .AddFileSystemDriver();
+                .AddFileSystemDriver(tempFileCleanerConfig: (opt) =>
+                {
+                    opt.ScanFolders.Add(TempPath, TempFileCleanerOptions.DefaultUnmanagedLifeTime);
+                });
             #endregion
 
             services.AddResponseCompression(options =>

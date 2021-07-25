@@ -1,4 +1,5 @@
 ﻿using elFinder.Net.Core.Services;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace elFinder.Net.Core.Extensions
@@ -48,32 +49,40 @@ namespace elFinder.Net.Core.Extensions
             return !fileSystem.ObjectAttribute.Locked;
         }
 
-        public static async Task<bool> CanCopyToAsync(this IFileSystem destination)
+        public static async Task<bool> CanCopyToAsync(this IFileSystem destination, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (await destination.ExistsAsync)
                 return destination.ObjectAttribute.Write;
 
             return destination.Parent?.ObjectAttribute.Write != false;
         }
 
-        public static async Task<bool> CanWriteAsync(this IFileSystem destination)
+        public static async Task<bool> CanWriteAsync(this IFileSystem destination, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (await destination.ExistsAsync)
                 return destination.ObjectAttribute.Write;
 
             return destination.Parent?.ObjectAttribute.Write != false;
         }
 
-        public static async Task<bool> CanMoveToAsync(this IFileSystem destination)
+        public static async Task<bool> CanMoveToAsync(this IFileSystem destination, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (await destination.ExistsAsync)
                 return destination.ObjectAttribute.Write;
 
             return destination.Parent?.ObjectAttribute.Write != false;
         }
 
-        public static async Task<bool> CanExtractToAsync(this IFileSystem destination)
+        public static async Task<bool> CanExtractToAsync(this IFileSystem destination, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (await destination.ExistsAsync)
                 return destination.ObjectAttribute.Write;
 

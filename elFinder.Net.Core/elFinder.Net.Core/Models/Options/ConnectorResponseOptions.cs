@@ -45,7 +45,7 @@ namespace elFinder.Net.Core.Models.Options
 
         public string trashHash => string.Empty;
 
-        public int uploadMaxConn => -1;
+        public int uploadMaxConn { get; set; } = 1;
 
         public string uploadMaxSize { get; set; }
 

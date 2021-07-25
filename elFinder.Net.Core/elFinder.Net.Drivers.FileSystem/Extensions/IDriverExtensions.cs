@@ -18,7 +18,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 MediaType? mediaType = null;
 
                 if ((mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) == null) return;
-                await file.RefreshAsync();
+                await file.RefreshAsync(cancellationToken: cancellationToken);
                 var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                 var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                 generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
@@ -29,7 +29,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 MediaType? mediaType = null;
                 if (args.NewFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
-                    await file.RefreshAsync();
+                    await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
@@ -43,7 +43,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
 
                 if ((mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) == null) return;
 
-                await file.RefreshAsync();
+                await file.RefreshAsync(cancellationToken: cancellationToken);
                 var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                 var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                 generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
@@ -54,7 +54,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 MediaType? mediaType = null;
                 if (args.NewFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
-                    await file.RefreshAsync();
+                    await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
@@ -66,7 +66,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 MediaType? mediaType = null;
                 if (args.FileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
-                    await file.RefreshAsync();
+                    await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);

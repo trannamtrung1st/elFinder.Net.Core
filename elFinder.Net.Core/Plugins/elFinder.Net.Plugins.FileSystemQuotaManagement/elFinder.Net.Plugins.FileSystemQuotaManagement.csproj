@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/trannamtrung1st/elFinder.Net.Core</RepositoryUrl>
     <RepositoryType>OSS</RepositoryType>
     <PackageTags>elFinder, connector, file-manager, driver, plugins</PackageTags>
-    <Version>1.2.5</Version>
+    <Version>1.3.3</Version>
   </PropertyGroup>
 
   <ItemGroup>

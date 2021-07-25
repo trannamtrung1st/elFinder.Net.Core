@@ -6,6 +6,7 @@ using elFinder.Net.Core.Plugins;
 using elFinder.Net.Core.Services.Drawing;
 using elFinder.Net.Drivers.FileSystem.Extensions;
 using elFinder.Net.Drivers.FileSystem.Helpers;
+using elFinder.Net.Drivers.FileSystem.Services;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
 using elFinder.Net.Plugins.LoggingExample.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -24,16 +25,19 @@ namespace elFinder.Net.AdvancedDemo
     public class Startup
     {
         public const string StorageFolder = ".storage";
+        public const string TempFileFolder = ".temp";
 
         public Startup(IConfiguration configuration, IWebHostEnvironment env)
         {
             Configuration = configuration;
             WebRootPath = env.WebRootPath;
             StoragePath = new DirectoryInfo(StorageFolder).FullName;
+            TempPath = new DirectoryInfo(TempFileFolder).FullName;
         }
 
         public static string WebRootPath { get; private set; }
         public static string StoragePath { get; private set; }
+        public static string TempPath { get; private set; }
 
         public static string MapStoragePath(string path)
         {
@@ -49,7 +53,10 @@ namespace elFinder.Net.AdvancedDemo
             var pluginCollection = new PluginCollection();
 
             services.AddElFinderAspNetCore()
-                .AddFileSystemDriver()
+                .AddFileSystemDriver(tempFileCleanerConfig: (opt) =>
+                {
+                    opt.ScanFolders.Add(TempPath, TempFileCleanerOptions.DefaultUnmanagedLifeTime);
+                })
                 .AddFileSystemQuotaManagement(pluginCollection)
                 .AddElFinderLoggingExample(pluginCollection)
                 .AddElFinderPlugins(pluginCollection);

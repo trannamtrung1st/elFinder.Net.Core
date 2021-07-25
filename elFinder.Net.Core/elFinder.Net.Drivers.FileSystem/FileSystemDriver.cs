@@ -28,6 +28,7 @@ namespace elFinder.Net.Drivers.FileSystem
 {
     public class FileSystemDriver : IDriver
     {
+        public const string ChunkingFolderPrefix = "_uploading_";
         public const string DefaultThumbExt = ".png";
         private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
 
@@ -38,7 +39,13 @@ namespace elFinder.Net.Drivers.FileSystem
         protected readonly IZipFileArchiver zipFileArchiver;
         protected readonly IThumbnailBackgroundGenerator thumbnailBackgroundGenerator;
         protected readonly IConnector connector;
+        protected readonly IConnectorManager connectorManager;
+        protected readonly ICryptographyProvider cryptographyProvider;
+        protected readonly ITempFileCleaner tempFileCleaner;
 
+        public event EventHandler<PathInfo> OnBeforeRemoveThumb;
+        public event EventHandler<PathInfo> OnAfterRemoveThumb;
+        public event EventHandler<Exception> OnRemoveThumbError;
         public event EventHandler<IDirectory> OnBeforeMakeDir;
         public event EventHandler<IDirectory> OnAfterMakeDir;
         public event EventHandler<IFile> OnBeforeMakeFile;
@@ -47,8 +54,14 @@ namespace elFinder.Net.Drivers.FileSystem
         public event EventHandler<(IFileSystem FileSystem, string PrevName)> OnAfterRename;
         public event EventHandler<IFileSystem> OnBeforeRemove;
         public event EventHandler<IFileSystem> OnAfterRemove;
-        public event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnBeforeUpload;
-        public event EventHandler<(IFile File, IFormFileWrapper FormFile, bool IsOverwrite)> OnAfterUpload;
+        public event EventHandler<IFileSystem> OnBeforeRollbackChunk;
+        public event EventHandler<IFileSystem> OnAfterRollbackChunk;
+        public event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnBeforeUpload;
+        public event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnAfterUpload;
+        public event EventHandler<(IFile File, bool IsOverwrite)> OnBeforeChunkMerged;
+        public event EventHandler<(IFile File, bool IsOverwrite)> OnAfterChunkMerged;
+        public event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnBeforeChunkTransfer;
+        public event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnAfterChunkTransfer;
         public event EventHandler<Exception> OnUploadError;
         public event EventHandler<(IFileSystem FileSystem, string NewDest, bool IsOverwrite)> OnBeforeMove;
         public event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterMove;
@@ -74,7 +87,10 @@ namespace elFinder.Net.Drivers.FileSystem
             IZipDownloadPathProvider zipDownloadPathProvider,
             IZipFileArchiver zipFileArchiver,
             IThumbnailBackgroundGenerator thumbnailBackgroundGenerator,
-            IConnector connector)
+            ICryptographyProvider cryptographyProvider,
+            IConnector connector,
+            IConnectorManager connectorManager,
+            ITempFileCleaner tempFileCleaner)
         {
             this.pathParser = pathParser;
             this.pictureEditor = pictureEditor;
@@ -82,7 +98,10 @@ namespace elFinder.Net.Drivers.FileSystem
             this.zipDownloadPathProvider = zipDownloadPathProvider;
             this.zipFileArchiver = zipFileArchiver;
             this.thumbnailBackgroundGenerator = thumbnailBackgroundGenerator;
+            this.cryptographyProvider = cryptographyProvider;
             this.connector = connector;
+            this.connectorManager = connectorManager;
+            this.tempFileCleaner = tempFileCleaner;
         }
 
         public virtual async Task<LsResponse> LsAsync(LsCommand cmd, CancellationToken cancellationToken = default)
@@ -248,17 +267,20 @@ namespace elFinder.Net.Drivers.FileSystem
                 InitResponse initResp;
                 if (fileInfo is RootInfoResponse rootInfo)
                 {
-                    initResp = new InitResponse(rootInfo, rootInfo.options);
+                    initResp = new InitResponse(rootInfo, rootInfo.options, cwd.Volume);
                 }
                 else
                 {
                     initResp = new InitResponse(fileInfo,
-                        new ConnectorResponseOptions(cwd, connector.Options.DisabledUICommands, currentVolume.DirectorySeparatorChar));
+                        new ConnectorResponseOptions(cwd, connector.Options.DisabledUICommands, currentVolume.DirectorySeparatorChar),
+                        cwd.Volume);
                     await AddParentsToListAsync(targetPath, initResp.files, cancellationToken: cancellationToken);
                 }
 
                 if (currentVolume.MaxUploadSize.HasValue)
-                    initResp.options.uploadMaxSize = $"{currentVolume.MaxUploadSizeInKb.Value}K";
+                    initResp.options.uploadMaxSize = $"{currentVolume.MaxUploadSizeInMb.Value}M";
+
+                initResp.options.uploadMaxConn = currentVolume.MaxUploadConnections;
 
                 openResp = initResp;
             }
@@ -271,12 +293,13 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 if (fileInfo is RootInfoResponse rootInfo)
                 {
-                    openResp = new OpenResponse(rootInfo, rootInfo.options);
+                    openResp = new OpenResponse(rootInfo, rootInfo.options, cwd.Volume);
                 }
                 else
                 {
                     openResp = new OpenResponse(fileInfo,
-                        new ConnectorResponseOptions(cwd, connector.Options.DisabledUICommands, currentVolume.DirectorySeparatorChar));
+                        new ConnectorResponseOptions(cwd, connector.Options.DisabledUICommands, currentVolume.DirectorySeparatorChar),
+                        cwd.Volume);
                 }
             }
 
@@ -433,25 +456,47 @@ namespace elFinder.Net.Drivers.FileSystem
             return rmResp;
         }
 
-        public virtual async Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default)
+        public virtual Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            Action<string> CreateAndHideDirectory = (str) =>
+            {
+                var dir = new DirectoryInfo(str);
+
+                if (!dir.Exists)
+                    dir.Create();
+
+                if (!dir.Attributes.HasFlag(FileAttributes.Hidden))
+                    dir.Attributes = FileAttributes.Hidden;
+            };
+
             if (volume.ThumbnailDirectory != null)
             {
-                var tmbDirObj = new FileSystemDirectory(volume.ThumbnailDirectory, volume);
+                CreateAndHideDirectory(volume.ThumbnailDirectory);
+            }
 
-                if (!await tmbDirObj.ExistsAsync)
-                    await tmbDirObj.CreateAsync(cancellationToken: cancellationToken);
+            if (volume.TempDirectory != null)
+            {
+                CreateAndHideDirectory(volume.TempDirectory);
+            }
 
-                if (!tmbDirObj.Attributes.HasFlag(FileAttributes.Hidden))
-                    tmbDirObj.Attributes = FileAttributes.Hidden;
+            if (volume.TempArchiveDirectory != null)
+            {
+                CreateAndHideDirectory(volume.TempArchiveDirectory);
+            }
+
+            if (volume.ChunkDirectory != null)
+            {
+                CreateAndHideDirectory(volume.ChunkDirectory);
             }
 
             if (!Directory.Exists(volume.RootDirectory))
             {
                 Directory.CreateDirectory(volume.RootDirectory);
             }
+
+            return Task.CompletedTask;
         }
 
         public virtual async Task<TmbResponse> TmbAsync(TmbCommand cmd, CancellationToken cancellationToken = default)
@@ -488,7 +533,17 @@ namespace elFinder.Net.Drivers.FileSystem
             if (cmd.Renames.Any(name => !IsObjectNameValid(name)))
                 throw new InvalidFileNameException();
 
-            if (!IsObjectNameValid(cmd.Suffix))
+            if (!IsObjectNameValid(cmd.Suffix) || !IsObjectNameValid(cmd.UploadName))
+                throw new InvalidFileNameException();
+
+            var isChunking = cmd.Chunk.ToString().Length > 0;
+            var isChunkMerge = isChunking && cmd.Cid.ToString().Length == 0;
+            var isFinalUploading = !isChunking || isChunkMerge;
+
+            if (isChunking && (cmd.Chunk.Any(name => !IsObjectNameValid(name))))
+                throw new InvalidFileNameException();
+
+            if (!isFinalUploading && !IsObjectNameValid(cmd.ChunkInfo.UploadingFileName))
                 throw new InvalidFileNameException();
 
             var uploadResp = new UploadResponse();
@@ -498,56 +553,58 @@ namespace elFinder.Net.Drivers.FileSystem
             var warningDetails = uploadResp.GetWarningDetails();
             var setNewParents = new HashSet<IDirectory>();
 
-            foreach (var uploadPath in cmd.UploadPathInfos.Distinct())
+            if (isFinalUploading)
             {
-                var directory = uploadPath.Directory;
-                string lastParentHash = null;
-
-                while (!volume.IsRoot(directory))
+                foreach (var uploadPath in cmd.UploadPathInfos.Distinct())
                 {
-                    var hash = lastParentHash ?? directory.GetHash(volume, pathParser);
-                    lastParentHash = directory.GetParentHash(volume, pathParser);
+                    var directory = uploadPath.Directory;
+                    string lastParentHash = null;
 
-                    if (!await directory.ExistsAsync && setNewParents.Add(directory))
-                        uploadResp.added.Add(await directory.ToFileInfoAsync(hash, lastParentHash, volume, connector.Options, cancellationToken: cancellationToken));
+                    while (!volume.IsRoot(directory))
+                    {
+                        var hash = lastParentHash ?? directory.GetHash(volume, pathParser);
+                        lastParentHash = directory.GetParentHash(volume, pathParser);
 
-                    directory = directory.Parent;
+                        if (!await directory.ExistsAsync && setNewParents.Add(directory))
+                            uploadResp.added.Add(await directory.ToFileInfoAsync(hash, lastParentHash, volume, connector.Options, cancellationToken: cancellationToken));
+
+                        directory = directory.Parent;
+                    }
                 }
             }
 
-            var uploadCount = cmd.Upload.Count();
-            for (var idx = 0; idx < uploadCount; idx++)
+            if (isChunkMerge)
             {
-                var formFile = cmd.Upload.ElementAt(idx);
-                IDirectory dest;
-                string destHash;
+                FileSystemDirectory chunkingDir = null;
+                FileSystemFile uploadFileInfo = null;
 
                 try
                 {
-                    if (cmd.UploadPath.Count > idx)
-                    {
-                        dest = cmd.UploadPathInfos.ElementAt(idx).Directory;
-                        destHash = cmd.UploadPath[idx];
-                    }
-                    else
-                    {
-                        dest = targetPath.Directory;
-                        destHash = targetPath.HashedTarget;
-                    }
+                    string uploadingFileName = Path.GetFileName(cmd.UploadName);
+                    string chunkMergeName = Path.GetFileName(cmd.Chunk);
 
-                    if (!dest.CanCreateObject())
-                        throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(dest)}");
+                    var uploadDir = cmd.UploadPath.Count > 0 ? cmd.UploadPathInfos.Single().Directory : cmd.TargetPath.Directory;
+                    var uploadDirHash = cmd.UploadPath.Count > 0 ? cmd.UploadPath.Single() : cmd.Target;
+                    var chunkingDirFullName = PathHelper.SafelyCombine(uploadDir.Volume.ChunkDirectory,
+                        uploadDir.Volume.ChunkDirectory, chunkMergeName);
+                    chunkingDir = new FileSystemDirectory(chunkingDirFullName, volume);
 
-                    string uploadFullName = PathHelper.SafelyCombine(dest.FullName, dest.FullName, Path.GetFileName(formFile.FileName));
-                    var uploadFileInfo = new FileSystemFile(uploadFullName, volume);
+                    if (!await chunkingDir.ExistsAsync)
+                        throw new DirectoryNotFoundException();
+
+                    if (!uploadDir.CanCreateObject())
+                        throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(uploadDir)}");
+
+                    var uploadFullName = PathHelper.SafelyCombine(uploadDir.FullName, uploadDir.FullName, uploadingFileName);
+                    uploadFileInfo = new FileSystemFile(uploadFullName, volume);
                     var isOverwrite = false;
 
                     if (await uploadFileInfo.ExistsAsync)
                     {
-                        if (cmd.Renames.Contains(formFile.FileName))
+                        if (cmd.Renames.Contains(uploadingFileName))
                         {
-                            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(formFile.FileName);
-                            var ext = Path.GetExtension(formFile.FileName);
+                            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(uploadingFileName);
+                            var ext = Path.GetExtension(uploadingFileName);
                             var backupName = $"{fileNameWithoutExt}{cmd.Suffix}{ext}";
                             var fullBakName = PathHelper.SafelyCombine(uploadFileInfo.Parent.FullName, uploadFileInfo.Parent.FullName, backupName);
                             var bakFile = new FileSystemFile(fullBakName, volume);
@@ -560,7 +617,7 @@ namespace elFinder.Net.Drivers.FileSystem
                             await uploadFileInfo.RenameAsync(backupName, cancellationToken: cancellationToken);
                             OnAfterRename?.Invoke(this, (uploadFileInfo, prevName));
 
-                            uploadResp.added.Add(await uploadFileInfo.ToFileInfoAsync(destHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
+                            uploadResp.added.Add(await uploadFileInfo.ToFileInfoAsync(uploadDirHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                             uploadFileInfo = new FileSystemFile(uploadFullName, volume);
                         }
                         else if (cmd.Overwrite == 0 || (cmd.Overwrite == null && !volume.UploadOverwrite))
@@ -575,35 +632,355 @@ namespace elFinder.Net.Drivers.FileSystem
                         else isOverwrite = true;
                     }
 
-                    OnBeforeUpload?.Invoke(this, (uploadFileInfo, formFile, isOverwrite));
-                    using (var fileStream = await uploadFileInfo.OpenWriteAsync(cancellationToken: cancellationToken))
-                    {
-                        await formFile.CopyToAsync(fileStream, cancellationToken: cancellationToken);
-                    }
-                    OnAfterUpload?.Invoke(this, (uploadFileInfo, formFile, isOverwrite));
+                    var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(chunkingDir.FullName);
+
+                    if (chunkedUploadInfo == null)
+                        throw new ConnectionAbortedException();
+
+                    OnBeforeChunkMerged?.Invoke(this, (uploadFileInfo, isOverwrite));
+                    chunkedUploadInfo.IsFileTouched = true;
+                    await MergeChunksAsync(uploadFileInfo, chunkingDir, isOverwrite, cancellationToken: cancellationToken);
+                    OnAfterChunkMerged?.Invoke(this, (uploadFileInfo, isOverwrite));
+
+                    connectorManager.ReleaseLockCache(chunkingDir.FullName);
 
                     await uploadFileInfo.RefreshAsync(cancellationToken);
-                    uploadResp.added.Add(await uploadFileInfo.ToFileInfoAsync(destHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
+                    uploadResp.added.Add(await uploadFileInfo.ToFileInfoAsync(uploadDirHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                 }
                 catch (Exception ex)
                 {
-                    var rootCause = ex.GetRootCause();
-                    OnUploadError?.Invoke(this, ex);
+                    var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(chunkingDir.FullName);
 
-                    if (rootCause is PermissionDeniedException pEx)
+                    if (chunkedUploadInfo != null)
                     {
-                        warning.Add(string.IsNullOrEmpty(pEx.Message) ? $"Permission denied: {formFile.FileName}" : pEx.Message);
-                        warningDetails.Add(ErrorResponse.Factory.UploadFile(pEx, formFile.FileName));
+                        lock (chunkedUploadInfo)
+                        {
+                            chunkedUploadInfo.Exception = ex.GetRootCause();
+
+                            if (chunkingDir != null)
+                            {
+                                chunkingDir.RefreshAsync().Wait();
+
+                                if (chunkingDir.ExistsAsync.Result)
+                                {
+                                    OnBeforeRollbackChunk?.Invoke(this, chunkingDir);
+                                    OnBeforeRemove?.Invoke(this, chunkingDir);
+                                    chunkingDir.DeleteAsync().Wait();
+                                    OnAfterRemove?.Invoke(this, chunkingDir);
+                                    OnAfterRollbackChunk?.Invoke(this, chunkingDir);
+                                }
+                            }
+
+                            if (uploadFileInfo != null && chunkedUploadInfo.IsFileTouched)
+                            {
+                                uploadFileInfo.RefreshAsync().Wait();
+
+                                if (uploadFileInfo.ExistsAsync.Result)
+                                {
+                                    OnBeforeRollbackChunk?.Invoke(this, uploadFileInfo);
+                                    OnBeforeRemove?.Invoke(this, uploadFileInfo);
+                                    uploadFileInfo.DeleteAsync().Wait();
+                                    OnAfterRemove?.Invoke(this, uploadFileInfo);
+                                    OnAfterRollbackChunk?.Invoke(this, uploadFileInfo);
+                                }
+                            }
+                        }
                     }
-                    else
+
+                    OnUploadError?.Invoke(this, ex);
+                    throw ex;
+                }
+            }
+            else
+            {
+                var uploadCount = cmd.Upload.Count();
+                for (var idx = 0; idx < uploadCount; idx++)
+                {
+                    var formFile = cmd.Upload.ElementAt(idx);
+                    IDirectory dest = null;
+                    IDirectory finalDest = null;
+                    string destHash = null;
+                    string uploadingFileName = "unknown", cleanFileName;
+
+                    try
                     {
-                        warning.Add($"Failed to upload: {formFile.FileName}");
-                        warningDetails.Add(ErrorResponse.Factory.UploadFile(ex, formFile.FileName));
+                        (string UploadFileName, int CurrentChunkNo, int TotalChunks)? chunkInfo = null;
+
+                        if (isChunking)
+                        {
+                            chunkInfo = cmd.ChunkInfo;
+                            uploadingFileName = Path.GetFileName(chunkInfo.Value.UploadFileName);
+                            cleanFileName = Path.GetFileName(cmd.Chunk);
+                        }
+                        else
+                        {
+                            uploadingFileName = Path.GetFileName(formFile.FileName);
+                            cleanFileName = uploadingFileName;
+                        }
+
+                        if (cmd.UploadPath.Count > idx)
+                        {
+                            if (isFinalUploading)
+                            {
+                                dest = cmd.UploadPathInfos.ElementAt(idx).Directory;
+                                finalDest = dest;
+                                destHash = cmd.UploadPath[idx];
+                            }
+                            else
+                            {
+                                finalDest = cmd.UploadPathInfos.ElementAt(idx).Directory;
+                                var tempDest = GetChunkDirectory(finalDest, uploadingFileName, cmd.Cid);
+                                dest = new FileSystemDirectory(tempDest, volume);
+                                destHash = cmd.UploadPath[idx];
+                            }
+                        }
+                        else
+                        {
+                            if (isFinalUploading)
+                            {
+                                dest = targetPath.Directory;
+                                finalDest = dest;
+                                destHash = targetPath.HashedTarget;
+                            }
+                            else
+                            {
+                                finalDest = targetPath.Directory;
+                                var tempDest = GetChunkDirectory(finalDest, uploadingFileName, cmd.Cid);
+                                dest = new FileSystemDirectory(tempDest, volume);
+                                destHash = targetPath.HashedTarget;
+                            }
+                        }
+
+                        if (isChunking)
+                        {
+                            var chunkedUploadInfo = connectorManager.GetLock(dest.FullName, _ => new ChunkedUploadInfo());
+                            lock (chunkedUploadInfo)
+                            {
+                                if (chunkedUploadInfo.Exception != null) throw chunkedUploadInfo.Exception;
+
+                                if (!dest.ExistsAsync.Result)
+                                {
+                                    if (!dest.CanCreate()) throw new PermissionDeniedException();
+
+                                    chunkedUploadInfo.TotalUploaded = 0;
+                                    OnBeforeMakeDir?.Invoke(this, dest);
+                                    dest.CreateAsync(cancellationToken: cancellationToken).Wait();
+                                    OnAfterMakeDir?.Invoke(this, dest);
+
+                                    WriteStatusFileAsync(dest).Wait();
+                                }
+                            }
+                        }
+
+                        if (!finalDest.CanCreateObject())
+                            throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(finalDest)}");
+
+                        var uploadFullName = PathHelper.SafelyCombine(dest.FullName, dest.FullName, cleanFileName);
+                        var uploadFileInfo = new FileSystemFile(uploadFullName, volume);
+                        var finalUploadFullName = PathHelper.SafelyCombine(finalDest.FullName, finalDest.FullName, uploadingFileName);
+                        var finalUploadFileInfo = isChunking ? new FileSystemFile(finalUploadFullName, volume) : uploadFileInfo;
+                        var isOverwrite = false;
+
+                        if (!isFinalUploading && await uploadFileInfo.ExistsAsync)
+                        {
+                            throw new PermissionDeniedException();
+                        }
+
+                        if (await finalUploadFileInfo.ExistsAsync)
+                        {
+                            if (cmd.Renames.Contains(uploadingFileName))
+                            {
+                                var fileNameWithoutExt = Path.GetFileNameWithoutExtension(uploadingFileName);
+                                var ext = Path.GetExtension(uploadingFileName);
+                                var backupName = $"{fileNameWithoutExt}{cmd.Suffix}{ext}";
+                                var fullBakName = PathHelper.SafelyCombine(finalUploadFileInfo.Parent.FullName, finalUploadFileInfo.Parent.FullName, backupName);
+                                var bakFile = new FileSystemFile(fullBakName, volume);
+
+                                if (await bakFile.ExistsAsync)
+                                    backupName = await bakFile.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
+
+                                var prevName = finalUploadFileInfo.Name;
+                                OnBeforeRename?.Invoke(this, (finalUploadFileInfo, backupName));
+                                await finalUploadFileInfo.RenameAsync(backupName, cancellationToken: cancellationToken);
+                                OnAfterRename?.Invoke(this, (finalUploadFileInfo, prevName));
+
+                                uploadResp.added.Add(await finalUploadFileInfo.ToFileInfoAsync(destHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
+                                finalUploadFileInfo = new FileSystemFile(finalUploadFullName, volume);
+                            }
+                            else if (cmd.Overwrite == 0 || (cmd.Overwrite == null && !volume.UploadOverwrite))
+                            {
+                                string newName = await finalUploadFileInfo.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
+                                finalUploadFullName = PathHelper.SafelyCombine(finalUploadFileInfo.DirectoryName, finalUploadFileInfo.DirectoryName, newName);
+                                finalUploadFileInfo = new FileSystemFile(finalUploadFullName, volume);
+                                isOverwrite = false;
+                            }
+                            else if (!finalUploadFileInfo.ObjectAttribute.Write)
+                                throw new PermissionDeniedException();
+                            else isOverwrite = true;
+                        }
+
+                        uploadFileInfo = isChunking ? uploadFileInfo : finalUploadFileInfo;
+
+                        if (isChunking)
+                        {
+                            await WriteStatusFileAsync(dest);
+                        }
+
+                        OnBeforeUpload?.Invoke(this, (uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking));
+                        using (var fileStream = await uploadFileInfo.OpenWriteAsync(cancellationToken: cancellationToken))
+                        {
+                            await formFile.CopyToAsync(fileStream, cancellationToken: cancellationToken);
+                        }
+                        OnAfterUpload?.Invoke(this, (uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking));
+
+                        if (isFinalUploading)
+                        {
+                            await finalUploadFileInfo.RefreshAsync(cancellationToken);
+                            uploadResp.added.Add(await finalUploadFileInfo.ToFileInfoAsync(destHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
+                        }
+                        else
+                        {
+                            var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(dest.FullName);
+
+                            if (chunkedUploadInfo != null)
+                            {
+                                lock (chunkedUploadInfo)
+                                {
+                                    if (chunkedUploadInfo.Exception != null) throw chunkedUploadInfo.Exception;
+
+                                    chunkedUploadInfo.TotalUploaded++;
+
+                                    if (chunkedUploadInfo.TotalUploaded == cmd.ChunkInfo.TotalChunks)
+                                    {
+                                        uploadResp._chunkmerged = dest.Name;
+                                        uploadResp._name = uploadingFileName;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        var rootCause = ex.GetRootCause();
+
+                        if (isChunking)
+                        {
+                            var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(dest.FullName);
+                            var isExceptionReturned = false;
+
+                            if (chunkedUploadInfo != null)
+                            {
+                                lock (chunkedUploadInfo)
+                                {
+                                    isExceptionReturned = chunkedUploadInfo.Exception != null;
+
+                                    if (!isExceptionReturned)
+                                    {
+                                        chunkedUploadInfo.Exception = rootCause;
+                                    }
+
+                                    if (dest != null)
+                                    {
+                                        dest.RefreshAsync().Wait();
+
+                                        if (dest.ExistsAsync.Result)
+                                        {
+                                            OnBeforeRollbackChunk?.Invoke(this, dest);
+                                            OnBeforeRemove?.Invoke(this, dest);
+                                            dest.DeleteAsync().Wait();
+                                            OnAfterRemove?.Invoke(this, dest);
+                                            OnAfterRollbackChunk?.Invoke(this, dest);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isExceptionReturned) return new UploadResponse();
+
+                            OnUploadError?.Invoke(this, ex);
+                            throw ex;
+                        }
+
+                        OnUploadError?.Invoke(this, ex);
+
+                        if (rootCause is PermissionDeniedException pEx)
+                        {
+                            warning.Add(string.IsNullOrEmpty(pEx.Message) ? $"Permission denied: {uploadingFileName}" : pEx.Message);
+                            warningDetails.Add(ErrorResponse.Factory.UploadFile(pEx, uploadingFileName));
+                        }
+                        else
+                        {
+                            warning.Add($"Failed to upload: {uploadingFileName}");
+                            warningDetails.Add(ErrorResponse.Factory.UploadFile(ex, uploadingFileName));
+                        }
                     }
                 }
             }
 
             return uploadResp;
+        }
+
+        public Task AbortUploadAsync(UploadCommand cmd, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (cmd.Name.Any(name => !IsObjectNameValid(name)))
+                throw new InvalidFileNameException();
+
+            if (cmd.Renames.Any(name => !IsObjectNameValid(name)))
+                throw new InvalidFileNameException();
+
+            if (!IsObjectNameValid(cmd.Suffix) || !IsObjectNameValid(cmd.UploadName))
+                throw new InvalidFileNameException();
+
+            var isChunking = cmd.Chunk.ToString().Length > 0;
+            var isChunkMerge = isChunking && cmd.Cid.ToString().Length == 0;
+            var isFinalUploading = !isChunking || isChunkMerge;
+
+            if (isChunking && (cmd.Chunk.Any(name => !IsObjectNameValid(name))))
+                throw new InvalidFileNameException();
+
+            if (!isFinalUploading && !IsObjectNameValid(cmd.ChunkInfo.UploadingFileName))
+                throw new InvalidFileNameException();
+
+            if (isFinalUploading) return Task.CompletedTask;
+
+            var targetPath = cmd.TargetPath;
+            var volume = targetPath.Volume;
+            IDirectory dest = null;
+
+            (string UploadFileName, int CurrentChunkNo, int TotalChunks)? chunkInfo = null;
+            string uploadingFileName, cleanFileName;
+
+            chunkInfo = cmd.ChunkInfo;
+            uploadingFileName = chunkInfo.Value.UploadFileName;
+            cleanFileName = Path.GetFileName(cmd.Chunk);
+
+            var uploadDir = cmd.UploadPathInfos.FirstOrDefault()?.Directory ?? cmd.TargetPath.Directory;
+            var tempDest = GetChunkDirectory(uploadDir, uploadingFileName, cmd.Cid);
+            dest = new FileSystemDirectory(tempDest, volume);
+
+            var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(dest.FullName);
+
+            if (chunkedUploadInfo != null)
+            {
+                lock (chunkedUploadInfo)
+                {
+                    chunkedUploadInfo.Exception = new ConnectionAbortedException();
+
+                    if (!dest.ExistsAsync.Result)
+                        throw new DirectoryNotFoundException();
+
+                    if (!dest.CanDelete())
+                        throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(dest)}");
+
+                    OnBeforeRemove?.Invoke(this, dest);
+                    dest.DeleteAsync(cancellationToken: cancellationToken).Wait();
+                    OnAfterRemove?.Invoke(this, dest);
+                }
+            }
+
+            return Task.CompletedTask;
         }
 
         public virtual async Task<TreeResponse> TreeAsync(TreeCommand cmd, CancellationToken cancellationToken = default)
@@ -790,9 +1167,9 @@ namespace elFinder.Net.Drivers.FileSystem
                         {
                             OnBeforeMove?.Invoke(this, (src.Directory, newDest, true));
                             pastedDir = await MergeAsync(src.Directory, newDest, dstVolume, copyOverwrite, cancellationToken: cancellationToken);
-                            OnBeforeRemove(this, src.Directory);
+                            OnBeforeRemove?.Invoke(this, src.Directory);
                             await src.Directory.DeleteAsync(cancellationToken: cancellationToken);
-                            OnAfterRemove(this, src.Directory);
+                            OnAfterRemove?.Invoke(this, src.Directory);
                             OnAfterMove?.Invoke(this, (src.Directory, pastedDir, true));
                         }
                         else
@@ -959,7 +1336,7 @@ namespace elFinder.Net.Drivers.FileSystem
             var archivePath = PathHelper.SafelyCombine(directory.FullName, directory.FullName, filename);
             var newFile = new FileSystemFile(archivePath, volume);
 
-            if (!await newFile.CanArchiveToAsync())
+            if (!await newFile.CanArchiveToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (newFile.DirectoryExists())
@@ -1018,7 +1395,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 fromPath = PathHelper.SafelyCombine(fromPath, fromPath, Path.GetFileNameWithoutExtension(targetPath.File.Name));
                 fromDir = new FileSystemDirectory(fromPath, volume);
 
-                if (!await fromDir.CanExtractToAsync())
+                if (!await fromDir.CanExtractToAsync(cancellationToken: cancellationToken))
                     throw new PermissionDeniedException();
 
                 if (fromDir.FileExists())
@@ -1047,7 +1424,7 @@ namespace elFinder.Net.Drivers.FileSystem
                     if (string.IsNullOrEmpty(entry.Name))
                     {
                         var dir = new FileSystemDirectory(fullName, volume);
-                        if (!await dir.CanExtractToAsync())
+                        if (!await dir.CanExtractToAsync(cancellationToken: cancellationToken))
                             throw new PermissionDeniedException();
 
                         if (dir.FileExists())
@@ -1071,7 +1448,7 @@ namespace elFinder.Net.Drivers.FileSystem
                     {
                         var file = new FileSystemFile(fullName, volume);
 
-                        if (!await file.CanExtractToAsync()) throw new PermissionDeniedException();
+                        if (!await file.CanExtractToAsync(cancellationToken: cancellationToken)) throw new PermissionDeniedException();
 
                         if (file.DirectoryExists())
                             throw new ExistsException(file.Name);
@@ -1272,7 +1649,8 @@ namespace elFinder.Net.Drivers.FileSystem
             var volume = cmd.TargetPaths.Select(p => p.Volume).First();
             var zipExt = $".{FileExtensions.Zip}";
 
-            var (archivePath, archiveFileKey) = await zipDownloadPathProvider.GetFileForArchivingAsync();
+            var (archivePath, archiveFileKey) = await zipDownloadPathProvider.GetFileForArchivingAsync(
+                volume.TempArchiveDirectory, cancellationToken: cancellationToken);
             var newFile = new FileSystemFile(archivePath, volume);
 
             try
@@ -1319,7 +1697,9 @@ namespace elFinder.Net.Drivers.FileSystem
             if (!IsObjectNameValid(cmd.DownloadFileName))
                 throw new InvalidFileNameException();
 
-            var archiveFile = await zipDownloadPathProvider.ParseArchiveFileKeyAsync(cmd.ArchiveFileKey);
+            var volume = cmd.CwdPath.Volume;
+            var archiveFile = await zipDownloadPathProvider.ParseArchiveFileKeyAsync(
+                volume.TempArchiveDirectory, cmd.ArchiveFileKey, cancellationToken);
             var tempFileInfo = new FileInfo(archiveFile);
 
             if (!tempFileInfo.Exists) throw new PermissionDeniedException($"Malformed key");
@@ -1412,9 +1792,9 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            MediaType? mediaType = null;
+            MediaType? mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify);
 
-            if ((mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify)) == null) return (null, null, mediaType);
+            if (mediaType == null) return (null, null, mediaType);
 
             var thumbPath = await GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
 
@@ -1454,6 +1834,7 @@ namespace elFinder.Net.Drivers.FileSystem
             return new FileSystemDirectory(fullPath, volume);
         }
 
+        // Or use Path.GetFileName(name) to remove all paths and keep the fileName only.
         protected bool IsObjectNameValid(string name)
         {
             return name == null || !name.Any(ch => InvalidFileNameChars.Contains(ch));
@@ -1539,7 +1920,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (!directory.CanCopy()) throw new PermissionDeniedException();
 
             var destInfo = new FileSystemDirectory(newDest, destVolume);
-            if (!await destInfo.CanCopyToAsync())
+            if (!await destInfo.CanCopyToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (destInfo.FileExists())
@@ -1584,7 +1965,7 @@ namespace elFinder.Net.Drivers.FileSystem
             cancellationToken.ThrowIfCancellationRequested();
 
             var destInfo = new FileSystemDirectory(newDest, destVolume);
-            if (!await destInfo.CanMoveToAsync())
+            if (!await destInfo.CanMoveToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (destInfo.FileExists())
@@ -1601,9 +1982,9 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 if (!await currentNewDest.ExistsAsync)
                 {
-                    OnBeforeMakeDir(this, currentNewDest);
+                    OnBeforeMakeDir?.Invoke(this, currentNewDest);
                     await currentNewDest.CreateAsync(cancellationToken: cancellationToken);
-                    OnAfterMakeDir(this, currentNewDest);
+                    OnAfterMakeDir?.Invoke(this, currentNewDest);
                 }
 
                 foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
@@ -1619,7 +2000,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 }
             }
 
-            await destInfo.RefreshAsync();
+            await destInfo.RefreshAsync(cancellationToken: cancellationToken);
             return destInfo;
         }
 
@@ -1651,21 +2032,30 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (path.IsDirectory)
+            try
             {
-                string thumbPath = await GenerateThumbPathAsync(path.Directory, cancellationToken: cancellationToken);
-                if (!string.IsNullOrEmpty(thumbPath) && Directory.Exists(thumbPath))
+                OnBeforeRemoveThumb?.Invoke(this, path);
+                if (path.IsDirectory)
                 {
-                    Directory.Delete(thumbPath, true);
+                    string thumbPath = await GenerateThumbPathAsync(path.Directory, cancellationToken: cancellationToken);
+                    if (!string.IsNullOrEmpty(thumbPath) && Directory.Exists(thumbPath))
+                    {
+                        Directory.Delete(thumbPath, true);
+                    }
                 }
+                else
+                {
+                    string thumbPath = await GenerateThumbPathAsync(path.File, cancellationToken: cancellationToken);
+                    if (!string.IsNullOrEmpty(thumbPath) && File.Exists(thumbPath))
+                    {
+                        File.Delete(thumbPath);
+                    }
+                }
+                OnAfterRemoveThumb?.Invoke(this, path);
             }
-            else
+            catch (Exception ex)
             {
-                string thumbPath = await GenerateThumbPathAsync(path.File, cancellationToken: cancellationToken);
-                if (!string.IsNullOrEmpty(thumbPath) && File.Exists(thumbPath))
-                {
-                    File.Delete(thumbPath);
-                }
+                OnRemoveThumbError?.Invoke(this, ex);
             }
         }
 
@@ -1694,6 +2084,70 @@ namespace elFinder.Net.Drivers.FileSystem
                 throw new CommandParamsException(fromcmd);
 
             return Convert.FromBase64String(parts[1]);
+        }
+
+        protected virtual async Task MergeChunksAsync(IFile destFile, IDirectory chunkingDir,
+            bool isOverwrite, CancellationToken cancellationToken = default)
+        {
+            var files = (await chunkingDir.GetFilesAsync(cancellationToken: cancellationToken))
+                .Where(f => f.Name != tempFileCleaner.Options.StatusFile)
+                .OrderBy(f => FileHelper.GetChunkInfo(f.Name).CurrentChunkNo).ToArray();
+
+            using (var fileStream = await destFile.OpenWriteAsync(cancellationToken: cancellationToken))
+            {
+                foreach (var file in files)
+                {
+                    await WriteStatusFileAsync(chunkingDir);
+
+                    OnBeforeChunkTransfer?.Invoke(this, (file, destFile, isOverwrite));
+                    using (var readStream = await file.OpenReadAsync(cancellationToken: cancellationToken))
+                    using (var memStream = new MemoryStream())
+                    {
+                        await readStream.CopyToAsync(memStream);
+                        var bytes = memStream.ToArray();
+                        await fileStream.WriteAsync(bytes, 0, bytes.Length);
+                    }
+                    OnAfterChunkTransfer?.Invoke(this, (file, destFile, isOverwrite));
+
+                    OnBeforeRemove?.Invoke(this, file);
+                    await file.DeleteAsync(cancellationToken: cancellationToken);
+                    OnAfterRemove?.Invoke(this, file);
+                }
+            }
+
+            OnBeforeRemove?.Invoke(this, chunkingDir);
+            await chunkingDir.DeleteAsync(cancellationToken: cancellationToken);
+            OnAfterRemove?.Invoke(this, chunkingDir);
+        }
+
+        private string GetChunkDirectory(IDirectory uploadDir, string uploadingFileName, string cid)
+        {
+            var bytes = Encoding.UTF8.GetBytes(uploadDir.FullName + uploadingFileName + cid);
+            var signature = BitConverter.ToString(cryptographyProvider.HMACSHA1ComputeHash(
+                nameof(GetChunkDirectory), bytes)).Replace("-", string.Empty);
+            var tempFileName = $"{ChunkingFolderPrefix}_{signature}";
+            var tempDest = PathHelper.SafelyCombine(uploadDir.Volume.ChunkDirectory, uploadDir.Volume.ChunkDirectory, tempFileName);
+            return tempDest;
+        }
+
+        private async Task WriteStatusFileAsync(IDirectory directory)
+        {
+            try
+            {
+                if (await directory.ExistsAsync)
+                {
+                    var statusFile = PathHelper.SafelyCombine(directory.FullName, directory.FullName, tempFileCleaner.Options.StatusFile);
+                    using (var file = File.OpenWrite(statusFile)) { }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        class ChunkedUploadInfo : ConnectorLock
+        {
+            public Exception Exception { get; set; }
+            public int TotalUploaded { get; set; }
+            public bool IsFileTouched { get; set; }
         }
     }
 }

@@ -114,7 +114,7 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (verify && !await this.CanWriteAsync())
+            if (verify && !await this.CanWriteAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (this.DirectoryExists())
@@ -131,7 +131,7 @@ namespace elFinder.Net.Drivers.FileSystem
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (verify && !await this.CanWriteAsync())
+            if (verify && !await this.CanWriteAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (this.DirectoryExists())
@@ -222,7 +222,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (verify && !this.CanCopy()) throw new PermissionDeniedException();
 
             var destInfo = new FileSystemFile(newDest, destVolume);
-            if (verify && !await destInfo.CanCopyToAsync())
+            if (verify && !await destInfo.CanCopyToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (destInfo.DirectoryExists())
@@ -241,7 +241,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
             var destInfo = new FileSystemFile(newDest, destVolume);
-            if (verify && !await destInfo.CanMoveToAsync())
+            if (verify && !await destInfo.CanMoveToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (destInfo.DirectoryExists())

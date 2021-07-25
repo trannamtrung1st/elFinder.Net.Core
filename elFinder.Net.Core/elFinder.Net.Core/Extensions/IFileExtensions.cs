@@ -122,8 +122,10 @@ namespace elFinder.Net.Core.Extensions
             return file.ObjectAttribute.Read && file.ObjectAttribute.Write;
         }
 
-        public static async Task<bool> CanArchiveToAsync(this IFile destination)
+        public static async Task<bool> CanArchiveToAsync(this IFile destination, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (await destination.ExistsAsync)
                 return destination.ObjectAttribute.Write;
 

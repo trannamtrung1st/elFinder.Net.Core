@@ -264,7 +264,7 @@ namespace elFinder.Net.Drivers.FileSystem
             if (verify && !this.CanMove()) throw new PermissionDeniedException();
 
             var destInfo = new FileSystemDirectory(newDest, destVolume);
-            if (verify && !await destInfo.CanMoveToAsync())
+            if (verify && !await destInfo.CanMoveToAsync(cancellationToken: cancellationToken))
                 throw new PermissionDeniedException();
 
             if (destInfo.FileExists())

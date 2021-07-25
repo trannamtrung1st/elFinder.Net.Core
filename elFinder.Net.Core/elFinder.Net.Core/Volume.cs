@@ -10,9 +10,12 @@ namespace elFinder.Net.Core
         string Name { get; set; }
         string Url { get; }
         string RootDirectory { get; }
+        string TempDirectory { get; }
+        string TempArchiveDirectory { get; }
+        string ChunkDirectory { get; }
+        string ThumbnailDirectory { get; }
         string StartDirectory { get; set; }
         string ThumbnailUrl { get; set; }
-        string ThumbnailDirectory { get; set; }
         int ThumbnailSize { get; set; }
         char DirectorySeparatorChar { get; set; }
         bool UploadOverwrite { get; set; }
@@ -20,6 +23,8 @@ namespace elFinder.Net.Core
         bool IsReadOnly { get; set; }
         bool IsLocked { get; set; }
         bool IsShowOnly { get; set; }
+        int? MaxUploadFiles { get; set; }
+        int MaxUploadConnections { get; set; }
         /// <summary>
         /// Get or sets maximum upload file size. This size is per files in bytes.
         /// Note: you still to configure maxupload limits in web.config for whole application
@@ -52,16 +57,33 @@ namespace elFinder.Net.Core
         public const string HashSeparator = "_";
 
         public Volume(IDriver driver,
-            string rootDirectory, string url, string thumbUrl,
+            string rootDirectory,
+            string tempDirectory,
+            string url,
+            string thumbUrl,
+            string tempArchiveDirectory = null,
+            string chunkDirectory = null,
+            string thumbnailDirectory = null,
             char directorySeparatorChar = default)
         {
             if (rootDirectory == null)
                 throw new ArgumentNullException(nameof(rootDirectory));
+            if (tempDirectory == null)
+                throw new ArgumentNullException(nameof(tempDirectory));
             if (url == null)
                 throw new ArgumentNullException(nameof(url));
 
             Driver = driver;
             RootDirectory = rootDirectory;
+            TempDirectory = tempDirectory;
+            TempArchiveDirectory = tempArchiveDirectory ?? tempDirectory;
+            ChunkDirectory = chunkDirectory ?? tempDirectory;
+            DirectorySeparatorChar = directorySeparatorChar == default ? Path.DirectorySeparatorChar : directorySeparatorChar;
+            ThumbnailDirectory = thumbnailDirectory ?? $"{tempDirectory}{DirectorySeparatorChar}.tmb";
+
+            if (Own(TempDirectory) || Own(TempArchiveDirectory) || Own(ChunkDirectory) || Own(ThumbnailDirectory))
+                throw new InvalidOperationException("Nested directories are not allowed");
+
             Url = url;
 
             if (!string.IsNullOrEmpty(thumbUrl))
@@ -69,8 +91,6 @@ namespace elFinder.Net.Core
                 ThumbnailUrl = thumbUrl;
             }
 
-            DirectorySeparatorChar = directorySeparatorChar == default ? Path.DirectorySeparatorChar : directorySeparatorChar;
-            ThumbnailDirectory = $"{Path.GetTempPath()}{DirectorySeparatorChar}.{nameof(elFinder)}tmb";
             IsLocked = false;
             Name = Path.GetFileNameWithoutExtension(rootDirectory);
             UploadOverwrite = true;
@@ -82,6 +102,10 @@ namespace elFinder.Net.Core
         public virtual string Name { get; set; }
         public virtual string Url { get; }
         public virtual string RootDirectory { get; }
+        public virtual string TempDirectory { get; }
+        public virtual string TempArchiveDirectory { get; }
+        public virtual string ChunkDirectory { get; }
+        public virtual string ThumbnailDirectory { get; }
 
         private string _startDirectory;
         public virtual string StartDirectory
@@ -95,7 +119,6 @@ namespace elFinder.Net.Core
             }
         }
         public virtual string ThumbnailUrl { get; set; }
-        public virtual string ThumbnailDirectory { get; set; }
         public virtual int ThumbnailSize { get; set; }
         public virtual char DirectorySeparatorChar { get; set; }
         public virtual bool UploadOverwrite { get; set; }
@@ -115,6 +138,10 @@ namespace elFinder.Net.Core
                 _defaultAttribute = value;
             }
         }
+
+        public virtual int? MaxUploadFiles { get; set; } = 20;
+
+        public int MaxUploadConnections { get; set; } = 1;
 
         public virtual double? MaxUploadSize { get; set; }
 

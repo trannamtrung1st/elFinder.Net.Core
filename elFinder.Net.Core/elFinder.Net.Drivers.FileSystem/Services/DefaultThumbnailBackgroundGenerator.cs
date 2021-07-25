@@ -2,6 +2,7 @@
 using elFinder.Net.Core.Services.Drawing;
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,6 +23,9 @@ namespace elFinder.Net.Drivers.FileSystem.Services
         private readonly ConcurrentQueue<string> _imageQueue;
         private readonly ManualResetEventSlim _imageSignal;
 
+        private bool _disposedValue;
+        private readonly CancellationTokenSource _tokenSource;
+
         public DefaultThumbnailBackgroundGenerator(IPictureEditor pictureEditor,
             IVideoEditor videoEditor)
         {
@@ -33,6 +37,7 @@ namespace elFinder.Net.Drivers.FileSystem.Services
             _videoMaps = new ConcurrentDictionary<string, (IFile File, IFile ThumbFile, int Size, bool KeepAspectRatio)>();
             _imageQueue = new ConcurrentQueue<string>();
             _videoQueue = new ConcurrentQueue<string>();
+            _tokenSource = new CancellationTokenSource();
             _videoWorker = new Thread(async () => await RunVideoGeneratorAsync());
             _videoWorker.IsBackground = true;
             _videoWorker.Start();
@@ -68,10 +73,9 @@ namespace elFinder.Net.Drivers.FileSystem.Services
 
         private async Task RunVideoGeneratorAsync()
         {
-            var running = true;
-
-            while (running)
+            while (!_tokenSource.IsCancellationRequested)
             {
+                _tokenSource.Token.ThrowIfCancellationRequested();
                 _videoSignal.Wait();
 
                 string nextFile;
@@ -79,26 +83,27 @@ namespace elFinder.Net.Drivers.FileSystem.Services
                 {
                     _videoMaps.TryRemove(nextFile, out var tuple);
                     var (file, tmbFile, size, keepAspectRatio) = tuple;
+
                     try
                     {
-                        await file.RefreshAsync();
+                        await file.RefreshAsync(_tokenSource.Token);
 
                         if (!await file.ExistsAsync || await tmbFile.ExistsAsync) continue;
 
-                        var thumb = await _videoEditor.GenerateThumbnailInBackgroundAsync(file, size, keepAspectRatio);
+                        var thumb = await _videoEditor.GenerateThumbnailInBackgroundAsync(file, size, keepAspectRatio, cancellationToken: _tokenSource.Token);
 
                         if (thumb != null)
                         {
                             using (thumb)
                             {
                                 thumb.ImageStream.Position = 0;
-                                await tmbFile.OverwriteAsync(thumb.ImageStream, verify: false);
+                                await tmbFile.OverwriteAsync(thumb.ImageStream, verify: false, cancellationToken: _tokenSource.Token);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(ex);
+                        Debug.WriteLine(ex);
                     }
                 }
 
@@ -110,10 +115,9 @@ namespace elFinder.Net.Drivers.FileSystem.Services
 
         private async Task RunImageGeneratorAsync()
         {
-            var running = true;
-
-            while (running)
+            while (!_tokenSource.IsCancellationRequested)
             {
+                _tokenSource.Token.ThrowIfCancellationRequested();
                 _imageSignal.Wait();
 
                 string nextFile;
@@ -121,14 +125,15 @@ namespace elFinder.Net.Drivers.FileSystem.Services
                 {
                     _imageMaps.TryRemove(nextFile, out var tuple);
                     var (file, tmbFile, size, keepAspectRatio) = tuple;
+
                     try
                     {
-                        await file.RefreshAsync();
+                        await file.RefreshAsync(_tokenSource.Token);
 
                         if (!await file.ExistsAsync || await tmbFile.ExistsAsync) continue;
 
                         ImageWithMimeType thumb;
-                        using (var fileStream = await file.OpenReadAsync(verify: false))
+                        using (var fileStream = await file.OpenReadAsync(verify: false, cancellationToken: _tokenSource.Token))
                         {
                             thumb = _pictureEditor.GenerateThumbnail(fileStream, size, keepAspectRatio);
                         }
@@ -138,13 +143,13 @@ namespace elFinder.Net.Drivers.FileSystem.Services
                             using (thumb)
                             {
                                 thumb.ImageStream.Position = 0;
-                                await tmbFile.OverwriteAsync(thumb.ImageStream, verify: false);
+                                await tmbFile.OverwriteAsync(thumb.ImageStream, verify: false, cancellationToken: _tokenSource.Token);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(ex);
+                        Debug.WriteLine(ex);
                     }
                 }
 
@@ -152,6 +157,37 @@ namespace elFinder.Net.Drivers.FileSystem.Services
 
                 _imageSignal.Reset();
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                    _tokenSource.Cancel();
+                    _tokenSource.Dispose();
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                _disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~DefaultThumbnailBackgroundGenerator()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

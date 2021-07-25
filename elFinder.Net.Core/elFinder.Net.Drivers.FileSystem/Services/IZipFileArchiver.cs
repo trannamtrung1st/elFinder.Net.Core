@@ -67,7 +67,7 @@ namespace elFinder.Net.Drivers.FileSystem.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!await dest.CanExtractToAsync()) throw new PermissionDeniedException();
+            if (!await dest.CanExtractToAsync(cancellationToken: cancellationToken)) throw new PermissionDeniedException();
 
             if (dest.DirectoryExists())
                 throw new ExistsException(dest.Name);

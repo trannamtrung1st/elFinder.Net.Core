@@ -321,29 +321,33 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     {
                         rmLength = file.LengthAsync.Result;
                     }
+                    else if (args is IDirectory dir)
+                    {
+                        rmLength = dir.GetSizeAndCountAsync(false, _ => true, _ => true, cancellationToken: cancellationToken).Result.Size;
+                    }
                 };
 
                 driver.OnAfterRemove += (sender, args) =>
                 {
-                    if (args is IFile file)
+                    if (rmLength == 0) return;
+
+                    var volume = args.Volume;
+                    var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
+                    Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
+
+                    var (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    try
                     {
-                        var volume = file.Volume;
-                        var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
-                        Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
-
-                        var (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
-
-                        try
-                        {
-                            storageCache.Storage -= rmLength.Value;
-                            rmLength = null;
-                            proceededDirs.Add(volumeDir);
-                        }
-                        finally
-                        {
-                            if (storageCache != null)
-                                storageManager.Unlock(storageCache);
-                        }
+                        storageCache.Storage -= rmLength.Value;
+                        rmLength = null;
+                        proceededDirs.Add(volumeDir);
+                    }
+                    finally
+                    {
+                        if (storageCache != null)
+                            storageManager.Unlock(storageCache);
+                        storageCache = null;
                     }
                 };
             }
@@ -370,14 +374,13 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
             var cmd = invocation.Arguments[0] as UploadCommand;
             var volume = cmd.TargetPath.Volume;
             var volumeDir = driver.CreateDirectory(volume.RootDirectory, volume);
+            var proceededDirs = new HashSet<IDirectory>();
             var cancellationToken = (CancellationToken)invocation.Arguments.Last();
             double? maximum = null;
+            DirectoryStorageCache storageCache = null;
 
             if (quotaOptions.Enabled && quotaOptions.Quotas.TryGetValue(volume.VolumeId, out var volumeQuota))
                 maximum = volumeQuota.MaxStorageSize;
-
-            DirectoryStorageCache storageCache = null;
-            bool proceeded = false;
 
             if (!_registeredHandlers.Contains(nameof(InterceptUpload)))
             {
@@ -391,6 +394,30 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
+                    if (args.IsChunking)
+                    {
+                        try
+                        {
+                            var totalUploadLength = cmd.RangeInfo.TotalBytes;
+
+                            if (args.IsOverwrite)
+                            {
+                                var destLength = args.DestFile.LengthAsync.Result;
+                                totalUploadLength -= destLength;
+                            }
+
+                            if (storageCache.Storage + totalUploadLength > maximum)
+                                throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                            return;
+                        }
+                        finally
+                        {
+                            storageManager.Unlock(storageCache);
+                            storageCache = null;
+                        }
+                    }
+
                     uploadLength = args.FormFile.Length;
                     if (args.IsOverwrite)
                     {
@@ -400,13 +427,69 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     if (storageCache.Storage + uploadLength > maximum)
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
-                    proceeded = true;
+                    proceededDirs.Add(volumeDir);
                 };
 
                 driver.OnAfterUpload += (sender, args) =>
                 {
-                    if (storageCache == null) return;
+                    if (storageCache == null && uploadLength == 0) return;
                     storageCache.Storage += uploadLength;
+                    uploadLength = 0;
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+
+                long transferLength = 0;
+                long originalLength = 0;
+                long tempTransferedLength = 0;
+
+                driver.OnBeforeChunkMerged += (sender, args) =>
+                {
+                    originalLength = args.IsOverwrite ? args.File.LengthAsync.Result : 0;
+                };
+
+                driver.OnBeforeChunkTransfer += (sender, args) =>
+                {
+                    (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    if (originalLength > 0)
+                    {
+                        tempTransferedLength -= originalLength;
+                        originalLength = 0;
+                    }
+
+                    transferLength = args.ChunkFile.LengthAsync.Result;
+                    tempTransferedLength += transferLength;
+
+                    if (storageCache.Storage + tempTransferedLength > maximum)
+                        throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
+
+                    proceededDirs.Add(volumeDir);
+                };
+
+                driver.OnAfterChunkTransfer += (sender, args) =>
+                {
+                    if (storageCache != null && tempTransferedLength > 0)
+                    {
+                        storageCache.Storage += tempTransferedLength;
+                        tempTransferedLength = 0;
+                    }
+
+                    storageManager.Unlock(storageCache);
+                    storageCache = null;
+                };
+
+                driver.OnAfterChunkMerged += (sender, arge) =>
+                {
+                    if (storageCache == null)
+                        (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    if (tempTransferedLength < 0)
+                    {
+                        storageCache.Storage += tempTransferedLength;
+                        tempTransferedLength = 0;
+                    }
+
                     storageManager.Unlock(storageCache);
                     storageCache = null;
                 };
@@ -415,8 +498,31 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 {
                     storageManager.Unlock(storageCache);
                     storageCache = null;
+
                     if (exception is QuotaException)
                         throw exception;
+                };
+
+                long rmLength = 0;
+
+                driver.OnBeforeRollbackChunk += (sender, args) =>
+                {
+                    if (args is IFile file)
+                    {
+                        rmLength = file.LengthAsync.Result;
+                        proceededDirs.Add(volumeDir);
+                    }
+                };
+
+                driver.OnAfterRollbackChunk += (sender, args) =>
+                {
+                    if (rmLength == 0 || args is IDirectory) return;
+
+                    if (storageCache == null)
+                        (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
+
+                    storageCache.Storage -= rmLength;
+                    rmLength = 0;
                 };
             }
 
@@ -429,8 +535,8 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 storageManager.Unlock(storageCache);
                 storageCache = null;
 
-                if (proceeded)
-                    storageManager.StartSizeCalculationThread(volumeDir);
+                foreach (var dir in proceededDirs)
+                    storageManager.StartSizeCalculationThread(dir);
             }
         }
 
@@ -602,7 +708,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     {
                         try
                         {
-                            file.DeleteAsync().Wait();
+                            file.DeleteAsync(cancellationToken: cancellationToken).Wait();
                         }
                         finally
                         {

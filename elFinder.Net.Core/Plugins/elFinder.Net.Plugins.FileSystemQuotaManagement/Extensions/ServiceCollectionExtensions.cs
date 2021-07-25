@@ -19,10 +19,10 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions
             if (storageManagerOptionsConfig == null)
                 storageManagerOptionsConfig = (options) =>
                 {
-                    options.StorageCachingMinutes = StorageManagerOptions.DefaultStorageCachingMinutes;
+                    options.StorageCachingLifeTime = StorageManagerOptions.DefaultStorageCachingLifeTime;
                     options.MaximumItems = StorageManagerOptions.DefaultMaximumItems;
                     options.ReservationsAfterCleanUp = StorageManagerOptions.DefaultReservationsAfterCleanUp;
-                    options.PollingIntervalInMinutes = StorageManagerOptions.DefaultPollingIntervalInMinutes;
+                    options.PollingInterval = StorageManagerOptions.DefaultPollingInterval;
                 };
 
             services.AddScoped<DriverInterceptor>()

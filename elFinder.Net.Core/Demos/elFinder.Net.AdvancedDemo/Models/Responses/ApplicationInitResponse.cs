@@ -9,6 +9,7 @@ namespace elFinder.Net.AdvancedDemo.Models.Responses
             cwd = initResp.cwd;
             files = initResp.files;
             options = initResp.options;
+            uplMaxFile = initResp.uplMaxFile;
         }
 
         public long usage { get; set; }

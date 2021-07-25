@@ -6,6 +6,27 @@ using System.Reflection;
 
 namespace elFinder.Net.Core.Models.Command
 {
+    public class RequestCommand
+    {
+        public RequestCommand(ConnectorCommand cmd)
+        {
+            ReqId = cmd.ReqId;
+            Cmd = cmd.Cmd;
+            Method = cmd.Method;
+            RequestHeaders = cmd.RequestHeaders;
+            Query = cmd.Query;
+            Form = cmd.Form;
+        }
+
+        public string ReqId { get; set; }
+        public string Cmd { get; set; }
+        public HttpMethod Method { get; set; }
+        public IReadOnlyDictionary<string, StringValues> RequestHeaders { get; set; }
+        public IReadOnlyDictionary<string, StringValues> Query { get; set; }
+        public IReadOnlyDictionary<string, StringValues> Form { get; set; }
+        public IReadOnlyDictionary<string, StringValues> Args => Method == HttpMethod.Get ? Query : Form;
+    }
+
     public class ConnectorCommand
     {
         public static readonly IEnumerable<string> AllCommands;
@@ -41,7 +62,8 @@ namespace elFinder.Net.Core.Models.Command
         public const string Param_Cmd = "cmd";
         public const string Param_Target = "target";
         public const string Param_Q = "q";
-        public const string Param_Mimes = "mimes[]";
+        public const string Param_MimesArr = "mimes[]";
+        public const string Param_Mimes = "mimes";
         public const string Param_Init = "init";
         public const string Param_Tree = "tree";
         public const string Param_Name = "name";
@@ -76,6 +98,9 @@ namespace elFinder.Net.Core.Models.Command
         public const string Param_Bg = "bg";
         public const string Param_Quality = "quality";
         public const string Param_Id = "id";
+        public const string Param_Chunk = "chunk";
+        public const string Param_Cid = "cid";
+        public const string Param_Range = "range";
 
         public const string Header_ReqId = "X-elFinderReqid";
 

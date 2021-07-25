@@ -26,7 +26,7 @@ namespace elFinder.Net.AdvancedDemo
                     Id = 2,
                     UserName = "msdiana",
                     VolumePath = "msdiana",
-                    QuotaInBytes = 20 * (long)Math.Pow(1024, 2),
+                    QuotaInBytes = (long)Math.Pow(1024, 3),
                 });
 
                 dbContext.SaveChanges();

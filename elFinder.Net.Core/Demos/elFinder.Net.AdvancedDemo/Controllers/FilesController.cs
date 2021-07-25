@@ -119,11 +119,17 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             _connector.PluginManager.Features[typeof(QuotaOptions)] = quotaOptions;
 
             // Volume initialization
-            var volume = new Volume(_driver, Startup.MapStoragePath($"./upload/{volumePath}"),
-                $"/api/files/storage/upload/{volumePath}/", $"/api/files/thumb/")
+            var volume = new Volume(_driver,
+                Startup.MapStoragePath($"./upload/{volumePath}"),
+                Startup.TempPath,
+                $"/api/files/storage/upload/{volumePath}/",
+                $"/api/files/thumb/",
+                thumbnailDirectory: Startup.MapStoragePath($"./thumb/{volumePath}"))
             {
                 Name = "My volume",
-                ThumbnailDirectory = Startup.MapStoragePath($"./thumb/{volumePath}")
+                MaxUploadFiles = 20,
+                MaxUploadSizeInMb = 10,
+                MaxUploadConnections = 3 // 3 upload requests at a time
             };
 
             _connector.AddVolume(volume);
@@ -215,7 +221,7 @@ namespace elFinder.Net.AdvancedDemo.Controllers
                 {
                     Expression = $"file.ext = 'exe'", // Example only
                     FileFilter = (file) => file.Extension == ".exe",
-                    Locked = true, Write = false, ShowOnly = true, Read = false
+                    Write = false, ShowOnly = true, Read = false
                 },
                 new FilteredObjectAttribute()
                 {

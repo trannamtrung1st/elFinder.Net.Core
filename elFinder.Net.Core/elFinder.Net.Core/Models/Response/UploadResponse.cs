@@ -18,6 +18,11 @@ namespace elFinder.Net.Core.Models.Response
         private List<object> _warning;
         public List<object> warning => _warning.Count > 0 ? _warning : null;
 
+        #region Chunked upload
+        public string _chunkmerged { get; set; }
+        public string _name { get; set; }
+        #endregion
+
         public List<object> GetWarnings()
         {
             return _warning;

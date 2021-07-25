@@ -47,11 +47,15 @@ namespace elFinder.Net.Demo31.Controllers
             for (var i = 0; i < 5; i++)
             {
                 var volume = new Volume(_driver,
-                    Startup.MapPath($"~/upload/volume-{i}"), $"/upload/volume-{i}", $"/api/files/thumb/")
+                    Startup.MapPath($"~/upload/volume-{i}"),
+                    Startup.TempPath,
+                    $"/upload/volume-{i}",
+                    $"/api/files/thumb/",
+                    thumbnailDirectory: PathHelper.GetFullPath("./thumb"))
                 {
                     StartDirectory = Startup.MapPath($"~/upload/volume-{i}/start"),
                     Name = $"Volume {i}",
-                    ThumbnailDirectory = PathHelper.GetFullPath("./thumb")
+                    MaxUploadConnections = 3
                 };
 
                 _connector.AddVolume(volume);
