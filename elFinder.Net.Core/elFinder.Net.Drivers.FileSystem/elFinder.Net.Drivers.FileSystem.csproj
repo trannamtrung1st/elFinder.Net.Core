@@ -13,7 +13,7 @@
     <IsPackable>true</IsPackable>
     <Description>elFinder.Net.Core Local File System driver.</Description>
     <PackageIcon>logo.png</PackageIcon>
-    <Version>1.3.3</Version>
+    <Version>1.3.3.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

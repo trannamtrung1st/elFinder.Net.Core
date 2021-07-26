@@ -546,8 +546,8 @@ namespace elFinder.Net.Core
                                 throw new ConnectionAbortedException();
                             }
                             else if (isChunking && !isChunkMerge
-                                    && (uploadCmd.Upload.Count() != 1 || uploadCmd.UploadPathInfos.Count() != 1
-                                        || uploadCmd.Upload.Single().Length > uploadCmd.RangeInfo.TotalBytes))
+                                && (uploadCmd.Upload.Count() != 1
+                                    || uploadCmd.Upload.Single().Length > uploadCmd.RangeInfo.TotalBytes))
                             {
                                 throw new CommandParamsException(ConnectorCommand.Cmd_Upload);
                             }
