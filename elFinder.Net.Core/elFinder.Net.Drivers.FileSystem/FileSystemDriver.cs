@@ -718,6 +718,39 @@ namespace elFinder.Net.Drivers.FileSystem
                             cleanFileName = uploadingFileName;
                         }
 
+                        if (volume.UploadOrder != null)
+                        {
+                            var mimeType = MimeHelper.GetMimeType(Path.GetExtension(uploadingFileName));
+                            var constraintMap = new Dictionary<UploadConstraintType, IEnumerable<string>>
+                            {
+                                [UploadConstraintType.Allow] = volume.UploadAllow,
+                                [UploadConstraintType.Deny] = volume.UploadDeny,
+                            };
+
+                            foreach (var constraintType in volume.UploadOrder)
+                            {
+                                var constraint = constraintMap[constraintType];
+                                if (constraint == null) continue;
+                                switch (constraintType)
+                                {
+                                    case UploadConstraintType.Allow:
+                                        {
+                                            if (!constraint.Contains(UploadConstants.UploadConstraintAllValue)
+                                                && !constraint.Contains(mimeType)
+                                                && !constraint.Contains(mimeType.Type)) throw new FileTypeNotAllowException();
+                                            break;
+                                        }
+                                    case UploadConstraintType.Deny:
+                                        {
+                                            if (constraint.Contains(UploadConstants.UploadConstraintAllValue)
+                                                || constraint.Contains(mimeType)
+                                                || constraint.Contains(mimeType.Type)) throw new FileTypeNotAllowException();
+                                            break;
+                                        }
+                                }
+                            }
+                        }
+
                         if (cmd.UploadPath.Count > idx)
                         {
                             if (isFinalUploading)
@@ -863,7 +896,7 @@ namespace elFinder.Net.Drivers.FileSystem
                     {
                         var rootCause = ex.GetRootCause();
 
-                        if (isChunking)
+                        if (isChunking && dest != null)
                         {
                             var chunkedUploadInfo = connectorManager.GetLock<ChunkedUploadInfo>(dest.FullName);
                             var isExceptionReturned = false;
@@ -907,6 +940,10 @@ namespace elFinder.Net.Drivers.FileSystem
                         {
                             warning.Add(string.IsNullOrEmpty(pEx.Message) ? $"Permission denied: {uploadingFileName}" : pEx.Message);
                             warningDetails.Add(ErrorResponse.Factory.UploadFile(pEx, uploadingFileName));
+                        }
+                        else if (rootCause is FileTypeNotAllowException fileTypeEx)
+                        {
+                            throw fileTypeEx;
                         }
                         else
                         {

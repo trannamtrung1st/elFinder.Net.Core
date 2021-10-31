@@ -67,6 +67,14 @@ namespace elFinder.Net.Core.Models.Response
                 };
             }
 
+            public static ErrorResponse UploadMime(Exception ex)
+            {
+                return new ErrorResponse(ex)
+                {
+                    error = ErrorResponse.UploadMime
+                };
+            }
+
             public static ErrorResponse Unknown(Exception ex)
             {
                 return new ErrorResponse(ex)
@@ -95,6 +103,7 @@ namespace elFinder.Net.Core.Models.Response
         public const string UploadFile = "errUploadFile";
         public const string InvalidFileName = "errInvName";
         public const string InvalidDirName = "errInvDirname";
+        public const string UploadMime = "errUploadMime";
         #endregion
     }
 }

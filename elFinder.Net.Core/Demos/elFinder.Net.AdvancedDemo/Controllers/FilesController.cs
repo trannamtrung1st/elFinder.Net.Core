@@ -129,7 +129,10 @@ namespace elFinder.Net.AdvancedDemo.Controllers
                 Name = "My volume",
                 MaxUploadFiles = 20,
                 MaxUploadSizeInMb = 10,
-                MaxUploadConnections = 3 // 3 upload requests at a time
+                MaxUploadConnections = 3, // 3 upload requests at a time
+                UploadAllow = new[] { "text" },
+                UploadDeny = new[] { "image", "text/csv" },
+                UploadOrder = new[] { UploadConstraintType.Allow, UploadConstraintType.Deny }
             };
 
             _connector.AddVolume(volume);

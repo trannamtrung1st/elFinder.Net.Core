@@ -25,6 +25,17 @@
         Internal = 1,
     }
 
+    public enum UploadConstraintType
+    {
+        Allow = 1,
+        Deny = 2
+    }
+
+    public static class UploadConstants
+    {
+        public const string UploadConstraintAllValue = "all";
+    }
+
     public static class ContentTypeNames
     {
         public static class Application

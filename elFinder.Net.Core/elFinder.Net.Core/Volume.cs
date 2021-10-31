@@ -32,6 +32,9 @@ namespace elFinder.Net.Core
         double? MaxUploadSize { get; set; }
         double? MaxUploadSizeInKb { get; set; }
         double? MaxUploadSizeInMb { get; set; }
+        IEnumerable<string> UploadAllow { get; set; }
+        IEnumerable<string> UploadDeny { get; set; }
+        IEnumerable<UploadConstraintType> UploadOrder { get; set; }
         IDriver Driver { get; }
         /// <summary>
         /// List of object filters used for permissions, access control.
@@ -96,6 +99,7 @@ namespace elFinder.Net.Core
             UploadOverwrite = true;
             CopyOverwrite = true;
             ThumbnailSize = 48;
+            UploadOrder = new[] { UploadConstraintType.Deny, UploadConstraintType.Allow };
         }
 
         public virtual string VolumeId { get; set; }
@@ -156,6 +160,10 @@ namespace elFinder.Net.Core
             get { return MaxUploadSizeInKb.HasValue ? (double?)(MaxUploadSizeInKb.Value / 1024.0) : null; }
             set { MaxUploadSizeInKb = value.HasValue ? (value * 1024) : null; }
         }
+
+        public virtual IEnumerable<string> UploadAllow { get; set; }
+        public virtual IEnumerable<string> UploadDeny { get; set; }
+        public virtual IEnumerable<UploadConstraintType> UploadOrder { get; set; }
 
         public virtual bool IsRoot(IFileSystem fileSystem)
         {
