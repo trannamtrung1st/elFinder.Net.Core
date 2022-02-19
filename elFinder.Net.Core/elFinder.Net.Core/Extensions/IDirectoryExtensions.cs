@@ -59,6 +59,10 @@ namespace elFinder.Net.Core.Extensions
         {
             var objAttr = new ObjectAttribute(volume.DefaultObjectAttribute);
 
+            objAttr.Write = !volume.IsReadOnly;
+            objAttr.Locked = volume.IsLocked;
+            objAttr.ShowOnly = volume.IsShowOnly;
+
             if (volume.ObjectAttributes != null)
             {
                 var attributeFilters = volume.ObjectAttributes.Where(x =>
@@ -74,10 +78,6 @@ namespace elFinder.Net.Core.Extensions
                     if (attr.Access != null) objAttr.Access = attr.Access.Value;
                 }
             }
-
-            objAttr.Write = volume.IsReadOnly ? false : objAttr.Write;
-            objAttr.Locked = volume.IsLocked ? true : objAttr.Locked;
-            objAttr.ShowOnly = volume.IsShowOnly ? true : objAttr.ShowOnly;
 
             return objAttr;
         }
