@@ -51,7 +51,7 @@ namespace elFinder.Net.AdvancedDemo.Services
 
                 using (var inputImage = new FileStream(output, FileMode.Open))
                 {
-                    return _pictureEditor.GenerateThumbnail(inputImage, size, keepAspectRatio);
+                    return await _pictureEditor.GenerateThumbnailAsync(inputImage, size, keepAspectRatio);
                 }
             }
             finally
@@ -73,7 +73,7 @@ namespace elFinder.Net.AdvancedDemo.Services
 
                 using (var inputImage = new FileStream(output, FileMode.Open))
                 {
-                    return _pictureEditor.GenerateThumbnail(inputImage, size, keepAspectRatio);
+                    return await _pictureEditor.GenerateThumbnailAsync(inputImage, size, keepAspectRatio);
                 }
             }
             finally

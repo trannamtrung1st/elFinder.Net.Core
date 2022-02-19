@@ -1602,7 +1602,8 @@ namespace elFinder.Net.Drivers.FileSystem
                         {
                             using (var stream = await targetFile.OpenReadAsync(cancellationToken: cancellationToken))
                             {
-                                return pictureEditor.Resize(stream, cmd.Width, cmd.Height, cmd.Quality);
+                                return await pictureEditor
+                                    .ScaleAsync(stream, cmd.Width, cmd.Height, cmd.Quality);
                             }
                         };
 
@@ -1626,7 +1627,7 @@ namespace elFinder.Net.Drivers.FileSystem
                         {
                             using (var stream = await targetFile.OpenReadAsync(cancellationToken: cancellationToken))
                             {
-                                return pictureEditor.Crop(stream, cmd.X, cmd.Y,
+                                return await pictureEditor.CropAsync(stream, cmd.X, cmd.Y,
                                     cmd.Width, cmd.Height, cmd.Quality);
                             }
                         };
@@ -1651,7 +1652,8 @@ namespace elFinder.Net.Drivers.FileSystem
                         {
                             using (var stream = await targetFile.OpenReadAsync(cancellationToken: cancellationToken))
                             {
-                                return pictureEditor.Rotate(stream, cmd.Degree, cmd.Background, cmd.Quality);
+                                return await pictureEditor
+                                .RotateAsync(stream, cmd.Degree, cmd.Background, cmd.Quality);
                             }
                         };
 
@@ -1777,7 +1779,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 return null;
             }
 
-            string mimeType = MimeHelper.GetMimeType(pictureEditor.ConvertThumbnailExtension(thumbFile.Extension));
+            string mimeType = MimeHelper.GetMimeType(thumbFile.Extension);
             return new ImageWithMimeType(mimeType, await thumbFile.OpenReadAsync(cancellationToken: cancellationToken));
         }
 

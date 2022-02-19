@@ -1,8 +1,9 @@
-﻿using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace elFinder.Net.Core.Services.Drawing
 {
@@ -11,8 +12,6 @@ namespace elFinder.Net.Core.Services.Drawing
     /// </summary>
     public class DefaultPictureEditor : IPictureEditor
     {
-        #region Constructors
-
         public DefaultPictureEditor(Color backgroundColor)
         {
             BackgroundColor = backgroundColor;
@@ -23,47 +22,50 @@ namespace elFinder.Net.Core.Services.Drawing
         {
         }
 
-        #endregion Constructors
-
-        #region IPictureEditor Members
-
         public virtual Color BackgroundColor { get; set; }
 
         public virtual bool CanProcessFile(string fileExtension)
         {
             string ext = fileExtension.ToLower();
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".tiff";
+
+            return ext == ".png"
+                || ext == ".jpg"
+                || ext == ".jpeg"
+                || ext == ".gif"
+                || ext == ".tiff"
+                || ext == ".bmp"
+                || ext == ".pbm"
+                || ext == ".tga"
+                || ext == ".webp";
         }
 
-        public virtual string ConvertThumbnailExtension(string originalImageExtension)
+        public virtual Task<ImageWithMimeType> CropAsync(
+            Stream input, int x, int y, int width, int height, int? quality = null)
         {
-            string ext = originalImageExtension.ToLower();
-            if (ext == ".tiff")
+            using (var image = Image.Load(input, out var format))
             {
-                return ".png";
-            }
+                image.Mutate(im => im
+                    .Crop(new Rectangle(x, y, width, height)));
 
-            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif")
-            {
-                return ext;
-            }
-            else
-            {
-                throw new ArgumentException(typeof(DefaultPictureEditor).FullName + " does not support thumbnails for '" + originalImageExtension + "' files.");
-            }
-        }
+                if (quality == null) return SaveImageAsync(image, format);
 
-        public virtual ImageWithMimeType Crop(Stream input, int x, int y, int width, int height, long? quality = null)
-        {
-            using (var image = Image.FromStream(input))
-            {
-                return ScaleOrCrop(image, new Rectangle(x, y, width, height), new Rectangle(0, 0, width, height), quality);
+                return ChangeQualityAsync(image, format, quality);
             }
         }
 
-        public virtual ImageWithMimeType GenerateThumbnail(Stream input, int size, bool keepAspectRatio)
+        public virtual Task<ImageWithMimeType> ScaleAsync(
+            Stream input, int width, int height, int? quality = null)
         {
-            using (var inputImage = Image.FromStream(input))
+            using (var image = Image.Load(input, out var format))
+            {
+                return ScaleAsync(image, format, width, height, quality);
+            }
+        }
+
+        public virtual Task<ImageWithMimeType> GenerateThumbnailAsync(
+            Stream input, int size, bool keepAspectRatio)
+        {
+            using (var inputImage = Image.Load(input, out var format))
             {
                 int targetWidth;
                 int targetHeight;
@@ -85,248 +87,91 @@ namespace elFinder.Net.Core.Services.Drawing
                     targetHeight = size;
                 }
 
-                return ScaleOrCrop(
-                    inputImage,
-                    new Rectangle(0, 0, inputImage.Width, inputImage.Height),
-                    new Rectangle(0, 0, targetWidth, targetHeight));
+                return ScaleAsync(
+                    inputImage, format, targetWidth, targetHeight);
             }
         }
 
         public virtual Size ImageSize(Stream input)
         {
-            using (var image = Image.FromStream(input))
+            using (var image = Image.Load(input))
             {
-                return new Size(image.Width, image.Height);
+                return image.Size();
             }
         }
 
         public virtual Size ImageSize(string fullPath)
         {
-            using (var image = Image.FromFile(fullPath))
+            using (var image = Image.Load(fullPath))
             {
                 return new Size(image.Width, image.Height);
             }
         }
 
-        public virtual ImageWithMimeType Resize(Stream input, int width, int height, long? quality = null)
+        public virtual Task<ImageWithMimeType> RotateAsync(Image image,
+            IImageFormat format, int angle, Color? background = null, int? quality = null)
         {
-            using (var image = Image.FromStream(input))
-            {
-                return ScaleOrCrop(image, new Rectangle(0, 0, image.Width, image.Height), new Rectangle(0, 0, width, height), quality);
-            }
+            image.Mutate(im => im
+                .Rotate(angle)
+                .BackgroundColor(background ?? BackgroundColor));
+
+            if (quality == null) return SaveImageAsync(image, format);
+
+            return ChangeQualityAsync(image, format, quality);
         }
 
-        public virtual ImageWithMimeType Rotate(Stream input, int angle, Color? background = null, long? quality = null)
+        public virtual Task<ImageWithMimeType> RotateAsync(Stream input,
+            int angle, string backgroundHex = null, int? quality = null)
         {
-            using (var image = Image.FromStream(input))
-            {
-                return Rotate(image, angle, background, quality);
-            }
-        }
-
-        public virtual ImageWithMimeType Rotate(Stream input, int angle, string backgroundHex = null, long? quality = null)
-        {
-            Color? bgColor = null;
+            Color bgColor = BackgroundColor;
 
             if (!string.IsNullOrEmpty(backgroundHex))
             {
-                var argb = Convert.ToInt32($"FF{backgroundHex.Substring(1)}", 16);
-                bgColor = Color.FromArgb(argb);
+                bgColor = Color.ParseHex($"{backgroundHex.Substring(1)}FF");
             }
 
-            using (var image = Image.FromStream(input))
+            using (var image = Image.Load(input, out var format))
             {
-                return Rotate(image, angle, bgColor, quality);
+                return RotateAsync(image, format, angle, bgColor, quality);
             }
         }
 
-        public virtual ImageWithMimeType ChangeQuality(Image image, ImageFormat imageFormat, long value)
+        protected virtual Task<ImageWithMimeType> ScaleAsync(
+            Image image, IImageFormat format, int width, int height, int? quality = null)
         {
-            var qualityEncoder = Encoder.Quality;
-            var parameters = new EncoderParameters(1);
-            var qualityParam = new EncoderParameter(qualityEncoder, value);
-            parameters.Param[0] = qualityParam;
+            image.Mutate(im => im
+                .Resize(width, height));
+
+            if (quality == null) return SaveImageAsync(image, format);
+
+            return ChangeQualityAsync(image, format, quality);
+        }
+
+        protected virtual async Task<ImageWithMimeType> SaveImageAsync(Image image, IImageFormat format)
+        {
             var memoryStream = new MemoryStream();
-
             string mimeType;
-            if (imageFormat.Guid == ImageFormat.Jpeg.Guid)
-                mimeType = "image/jpeg";
-            else if (imageFormat.Guid == ImageFormat.Gif.Guid)
-                mimeType = "image/gif";
-            else
-                mimeType = "image/png";
-
-            var imageCodecInfo = GetEncoderInfo(mimeType);
-            image.Save(memoryStream, imageCodecInfo, parameters);
+            await image.SaveAsync(memoryStream, format);
+            mimeType = format.DefaultMimeType;
             memoryStream.Position = 0;
+
             return new ImageWithMimeType(mimeType, memoryStream);
         }
 
-        #endregion IPictureEditor Members
-
-        /// <summary>
-        /// Creates a new Image containing the same image, only rotated
-        /// </summary>
-        /// <param name="image">The <see cref="System.Drawing.Image"/> to rotate</param>
-        /// <param name="degrees">The amount to rotate the image, clockwise, in degrees</param>
-        /// <returns>A new <see cref="System.Drawing.Bitmap"/> that is just large enough to contain the rotated image without cutting any corners off.</returns>
-        /// <remarks>Original code can be found at http://www.codeproject.com/Articles/58815/C-Image-PictureBox-Rotations </remarks>
-        /// <exception cref="System.ArgumentNullException">Thrown if <see cref="image"/> is null.</exception>
-        protected virtual ImageWithMimeType Rotate(Image image, float degrees, Color? background, long? quality = null)
+        protected virtual async Task<ImageWithMimeType> ChangeQualityAsync(Image image, IImageFormat format, int? quality = null)
         {
-            if (image == null)
+            var memoryStream = new MemoryStream();
+            IImageEncoder imageEncoder;
+            string mimeType = JpegFormat.Instance.DefaultMimeType;
+            imageEncoder = new JpegEncoder
             {
-                throw new ArgumentNullException("image");
-            }
+                Quality = quality,
+            };
 
-            const double halfPi = Math.PI / 2.0;
-            double oldWidth = image.Width;
-            double oldHeight = image.Height;
-
-            double theta = degrees * Math.PI / 180.0;
-            double lockedTheta = theta;
-
-            while (lockedTheta < 0.0)
-            {
-                lockedTheta += 2 * Math.PI;
-            }
-
-            double newWidth, newHeight;
-            int nWidth, nHeight;
-
-            double adjacentTop;
-            double oppositeTop;
-            double adjacentBottom;
-            double oppositeBottom;
-
-            if ((lockedTheta >= 0.0 && lockedTheta < halfPi) ||
-                (lockedTheta >= Math.PI && lockedTheta < (Math.PI + halfPi)))
-            {
-                adjacentTop = Math.Abs(Math.Cos(lockedTheta)) * oldWidth;
-                oppositeTop = Math.Abs(Math.Sin(lockedTheta)) * oldWidth;
-
-                adjacentBottom = Math.Abs(Math.Cos(lockedTheta)) * oldHeight;
-                oppositeBottom = Math.Abs(Math.Sin(lockedTheta)) * oldHeight;
-            }
-            else
-            {
-                adjacentTop = Math.Abs(Math.Sin(lockedTheta)) * oldHeight;
-                oppositeTop = Math.Abs(Math.Cos(lockedTheta)) * oldHeight;
-
-                adjacentBottom = Math.Abs(Math.Sin(lockedTheta)) * oldWidth;
-                oppositeBottom = Math.Abs(Math.Cos(lockedTheta)) * oldWidth;
-            }
-
-            newWidth = adjacentTop + oppositeBottom;
-            newHeight = adjacentBottom + oppositeTop;
-
-            nWidth = (int)Math.Ceiling(newWidth);
-            nHeight = (int)Math.Ceiling(newHeight);
-
-            using (var rotatedBmp = new Bitmap(nWidth, nHeight))
-            {
-                using (var g = Graphics.FromImage(rotatedBmp))
-                {
-                    g.Clear(background ?? BackgroundColor);
-                    Point[] points;
-                    if (lockedTheta >= 0.0 && lockedTheta < halfPi)
-                    {
-                        points = new Point[]
-                        {
-                            new Point((int) oppositeBottom, 0),
-                            new Point(nWidth, (int) oppositeTop),
-                            new Point(0, (int) adjacentBottom)
-                        };
-                    }
-                    else if (lockedTheta >= halfPi && lockedTheta < Math.PI)
-                    {
-                        points = new Point[]
-                        {
-                            new Point(nWidth, (int) oppositeTop),
-                            new Point((int) adjacentTop, nHeight),
-                            new Point((int) oppositeBottom, 0)
-                        };
-                    }
-                    else if (lockedTheta >= Math.PI && lockedTheta < (Math.PI + halfPi))
-                    {
-                        points = new Point[]
-                        {
-                            new Point((int) adjacentTop, nHeight),
-                            new Point(0, (int) adjacentBottom),
-                            new Point(nWidth, (int) oppositeTop)
-                        };
-                    }
-                    else
-                    {
-                        points = new Point[]
-                        {
-                            new Point(0, (int) adjacentBottom),
-                            new Point((int) oppositeBottom, 0),
-                            new Point((int) adjacentTop, nHeight)
-                        };
-                    }
-                    g.InterpolationMode = InterpolationMode.HighQualityBilinear;
-
-                    g.DrawImage(image, points);
-                }
-
-                if (quality == null) return SaveImage(rotatedBmp, image.RawFormat);
-                return ChangeQuality(rotatedBmp, image.RawFormat, quality.Value);
-            }
-        }
-
-        protected virtual ImageWithMimeType SaveImage(Image image, ImageFormat imageFormat)
-        {
-            var memoryStream = new MemoryStream(); // Will be disposed when "ImageWithMimeType" is disposed
-
-            string mimeType;
-            if (imageFormat.Guid == ImageFormat.Jpeg.Guid)
-            {
-                image.Save(memoryStream, ImageFormat.Jpeg);
-                mimeType = "image/jpeg";
-            }
-            else if (imageFormat.Guid == ImageFormat.Gif.Guid)
-            {
-                image.Save(memoryStream, ImageFormat.Gif);
-                mimeType = "image/gif";
-            }
-            else
-            {
-                image.Save(memoryStream, ImageFormat.Png);
-                mimeType = "image/png";
-            }
+            await image.SaveAsync(memoryStream, imageEncoder);
             memoryStream.Position = 0;
+
             return new ImageWithMimeType(mimeType, memoryStream);
-        }
-
-        protected virtual ImageWithMimeType ScaleOrCrop(Image image, Rectangle source, Rectangle destination, long? quality = null)
-        {
-            using (var newImage = new Bitmap(destination.Width, destination.Height))
-            {
-                using (var g = Graphics.FromImage(newImage))
-                {
-                    g.SmoothingMode = SmoothingMode.HighQuality;
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                    g.DrawImage(image, destination, source, GraphicsUnit.Pixel);
-                }
-
-                if (quality == null) return SaveImage(newImage, image.RawFormat);
-                return ChangeQuality(newImage, image.RawFormat, quality.Value);
-            }
-        }
-
-        protected virtual ImageCodecInfo GetEncoderInfo(string mimeType)
-        {
-            int j;
-            ImageCodecInfo[] encoders;
-            encoders = ImageCodecInfo.GetImageEncoders();
-            for (j = 0; j < encoders.Length; ++j)
-            {
-                if (encoders[j].MimeType == mimeType)
-                    return encoders[j];
-            }
-            return null;
         }
     }
 }

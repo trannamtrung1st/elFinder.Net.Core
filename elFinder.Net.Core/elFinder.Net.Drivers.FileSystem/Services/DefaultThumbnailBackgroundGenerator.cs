@@ -135,7 +135,7 @@ namespace elFinder.Net.Drivers.FileSystem.Services
                         ImageWithMimeType thumb;
                         using (var fileStream = await file.OpenReadAsync(verify: false, cancellationToken: _tokenSource.Token))
                         {
-                            thumb = _pictureEditor.GenerateThumbnail(fileStream, size, keepAspectRatio);
+                            thumb = await _pictureEditor.GenerateThumbnailAsync(fileStream, size, keepAspectRatio);
                         }
 
                         if (thumb != null)

@@ -166,7 +166,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             using (var original = await file.OpenReadAsync(verify: false, cancellationToken: cancellationToken))
             {
-                var thumb = pictureEditor.GenerateThumbnail(original, tmbSize, true);
+                var thumb = await pictureEditor.GenerateThumbnailAsync(original, tmbSize, true);
 
                 if (thumb == null) return null;
 
