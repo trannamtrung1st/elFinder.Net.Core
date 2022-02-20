@@ -151,13 +151,16 @@ namespace elFinder.Net.Core
 
                             if (openCmd.Tree == 1)
                             {
-                                foreach (var volume in Volumes)
+                                for (var i = 0; i < Volumes.Count; i++)
                                 {
+                                    var volume = Volumes[i];
+
                                     if (openCmd.TargetPath.IsRoot && volume == openVolume) continue;
 
                                     var rootVolumeDir = volume.Driver.CreateDirectory(volume.RootDirectory, volume);
                                     var hash = rootVolumeDir.GetHash(volume, pathParser);
-                                    openResp.files.Add(await rootVolumeDir.ToFileInfoAsync(hash, null, volume, Options, cancellationToken: cancellationToken));
+                                    var dirInfo = await rootVolumeDir.ToFileInfoAsync(hash, null, volume, Options, cancellationToken: cancellationToken);
+                                    openResp.files.Insert(i, dirInfo);
                                 }
                             }
 
