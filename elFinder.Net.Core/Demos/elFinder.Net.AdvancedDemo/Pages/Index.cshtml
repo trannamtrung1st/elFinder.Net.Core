@@ -58,6 +58,7 @@
             };
 
             const elf = $('#elfinder').elfinder(options).elfinder('instance');
+            let fmInstance;
 
             //$.ajax({
             //    url: '/lib/elfinder/js/i18n/elfinder.vi.js',
@@ -80,9 +81,23 @@
                 elf.getUI('stat').append(info);
             };
             elf.bind('open', function (e, fm) {
+                fmInstance = fm;
                 fm.getUI().data('_quota', e.data.quota);
                 fm.getUI().data('_usage', e.data.usage);
             }).bind('opendone', elfinderSetVolumeSize);
+
+            // Example for avoiding draggable for locked objects
+            $('#elfinder').on('mouseover', (e) => {
+                $('.elfinder-cwd-file').off('mouseenter.custom').on('mouseenter.custom', (e) => {
+                    const id = e.currentTarget.id;
+                    const file = fmInstance.file(id);
+                    if (file.locked === 1) {
+                        fmInstance.draggable.appendTo = '';
+                    } else {
+                        fmInstance.draggable.appendTo = $('#elfinder');
+                    }
+                });
+            });
         });
     </script>
 }
