@@ -130,7 +130,7 @@ namespace elFinder.Net.AdvancedDemo.Controllers
                 MaxUploadFiles = 20,
                 MaxUploadSizeInMb = 10,
                 MaxUploadConnections = 3, // 3 upload requests at a time
-                UploadAllow = new[] { "text" },
+                //UploadAllow = new[] { "text" },
                 UploadDeny = new[] { "image", "text/csv" },
                 UploadOrder = new[] { UploadConstraintType.Allow, UploadConstraintType.Deny }
             };
@@ -143,9 +143,10 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             //_driver.SetupBackgroundThumbnailGenerator(_thumbnailGenerator, _pictureEditor, _videoEditor, cancellationToken: cancellationToken);
 
             // Events
-            _driver.OnAfterUpload += (sender, args) =>
+            _driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
             {
-                Console.WriteLine($"Uploaded to: {args.File.FullName}");
+                Console.WriteLine($"Uploaded to: {destFile?.FullName}");
+                return Task.CompletedTask;
             };
 
             // Quota management: This is set up per volume. Use VolumeId as key.

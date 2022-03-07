@@ -91,7 +91,7 @@
                 $('.elfinder-cwd-file').off('mouseenter.custom').on('mouseenter.custom', (e) => {
                     const id = e.currentTarget.id;
                     const file = fmInstance.file(id);
-                    if (file.locked === 1) {
+                    if (file && file.locked === 1) {
                         fmInstance.draggable.appendTo = '';
                     } else {
                         fmInstance.draggable.appendTo = $('#elfinder');
