@@ -2,7 +2,6 @@
 using elFinder.Net.Core.Exceptions;
 using elFinder.Net.Core.Extensions;
 using elFinder.Net.Core.Helpers;
-using elFinder.Net.Core.Http;
 using elFinder.Net.Core.Models.Command;
 using elFinder.Net.Core.Models.FileInfo;
 using elFinder.Net.Core.Models.Options;
@@ -43,43 +42,43 @@ namespace elFinder.Net.Drivers.FileSystem
         protected readonly ICryptographyProvider cryptographyProvider;
         protected readonly ITempFileCleaner tempFileCleaner;
 
-        public event EventHandler<PathInfo> OnBeforeRemoveThumb;
-        public event EventHandler<PathInfo> OnAfterRemoveThumb;
-        public event EventHandler<Exception> OnRemoveThumbError;
-        public event EventHandler<IDirectory> OnBeforeMakeDir;
-        public event EventHandler<IDirectory> OnAfterMakeDir;
-        public event EventHandler<IFile> OnBeforeMakeFile;
-        public event EventHandler<IFile> OnAfterMakeFile;
-        public event EventHandler<(IFileSystem FileSystem, string RenameTo)> OnBeforeRename;
-        public event EventHandler<(IFileSystem FileSystem, string PrevName)> OnAfterRename;
-        public event EventHandler<IFileSystem> OnBeforeRemove;
-        public event EventHandler<IFileSystem> OnAfterRemove;
-        public event EventHandler<IFileSystem> OnBeforeRollbackChunk;
-        public event EventHandler<IFileSystem> OnAfterRollbackChunk;
-        public event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnBeforeUpload;
-        public event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnAfterUpload;
-        public event EventHandler<(IFile File, bool IsOverwrite)> OnBeforeChunkMerged;
-        public event EventHandler<(IFile File, bool IsOverwrite)> OnAfterChunkMerged;
-        public event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnBeforeChunkTransfer;
-        public event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnAfterChunkTransfer;
-        public event EventHandler<Exception> OnUploadError;
-        public event EventHandler<(IFileSystem FileSystem, string NewDest, bool IsOverwrite)> OnBeforeMove;
-        public event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterMove;
-        public event EventHandler<(IFileSystem FileSystem, string Dest, bool IsOverwrite)> OnBeforeCopy;
-        public event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterCopy;
-        public event EventHandler<IFile> OnBeforeArchive;
-        public event EventHandler<IFile> OnAfterArchive;
-        public event EventHandler<(Exception Exception, IFile File)> OnArchiveError;
-        public event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnBeforeExtract;
-        public event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnAfterExtract;
-        public event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnBeforeExtractFile;
-        public event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnAfterExtractFile;
-        public event EventHandler<(byte[] Data, IFile File)> OnBeforeWriteData;
-        public event EventHandler<(byte[] Data, IFile File)> OnAfterWriteData;
-        public event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnBeforeWriteStream;
-        public event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnAfterWriteStream;
-        public event EventHandler<(string Content, string Encoding, IFile File)> OnBeforeWriteContent;
-        public event EventHandler<(string Content, string Encoding, IFile File)> OnAfterWriteContent;
+        public event BeforeRemoveThumbAsync OnBeforeRemoveThumb;
+        public event AfterRemoveThumbAsync OnAfterRemoveThumb;
+        public event RemoveThumbErrorAsync OnRemoveThumbError;
+        public event BeforeMakeDirAsync OnBeforeMakeDir;
+        public event AfterMakeDirAsync OnAfterMakeDir;
+        public event BeforeMakeFileAsync OnBeforeMakeFile;
+        public event AfterMakeFileAsync OnAfterMakeFile;
+        public event BeforeRenameAsync OnBeforeRename;
+        public event AfterRenameAsync OnAfterRename;
+        public event BeforeRemoveAsync OnBeforeRemove;
+        public event AfterRemoveAsync OnAfterRemove;
+        public event BeforeRollbackChunkAsync OnBeforeRollbackChunk;
+        public event AfterRollbackChunkAsync OnAfterRollbackChunk;
+        public event BeforeUploadAsync OnBeforeUpload;
+        public event AfterUploadAsync OnAfterUpload;
+        public event BeforeChunkMergedAsync OnBeforeChunkMerged;
+        public event AfterChunkMergedAsync OnAfterChunkMerged;
+        public event BeforeChunkTransferAsync OnBeforeChunkTransfer;
+        public event AfterChunkTransferAsync OnAfterChunkTransfer;
+        public event UploadErrorAsync OnUploadError;
+        public event BeforeMoveAsync OnBeforeMove;
+        public event AfterMoveAsync OnAfterMove;
+        public event BeforeCopyAsync OnBeforeCopy;
+        public event AfterCopyAsync OnAfterCopy;
+        public event BeforeArchiveAsync OnBeforeArchive;
+        public event AfterArchiveAsync OnAfterArchive;
+        public event ArchiveErrorAsync OnArchiveError;
+        public event BeforeExtractAsync OnBeforeExtract;
+        public event AfterExtractAsync OnAfterExtract;
+        public event BeforeExtractFileAsync OnBeforeExtractFile;
+        public event AfterExtractFileAsync OnAfterExtractFile;
+        public event BeforeWriteDataAsync OnBeforeWriteData;
+        public event AfterWriteDataAsync OnAfterWriteData;
+        public event BeforeWriteStreamAsync OnBeforeWriteStream;
+        public event AfterWriteStreamAsync OnAfterWriteStream;
+        public event BeforeWriteContentAsync OnBeforeWriteContent;
+        public event AfterWriteContentAsync OnAfterWriteContent;
 
         public FileSystemDriver(IPathParser pathParser,
             IPictureEditor pictureEditor,
@@ -162,9 +161,9 @@ namespace elFinder.Net.Drivers.FileSystem
                 var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(targetPath.Directory.FullName,
                     targetPath.Directory.FullName, cmd.Name), volume);
 
-                OnBeforeMakeDir?.Invoke(this, newDir);
+                await (OnBeforeMakeDir?.Invoke(newDir) ?? Task.CompletedTask);
                 await newDir.CreateAsync(cancellationToken: cancellationToken);
-                OnAfterMakeDir?.Invoke(this, newDir);
+                await (OnAfterMakeDir?.Invoke(newDir) ?? Task.CompletedTask);
 
                 var hash = newDir.GetHash(volume, pathParser);
                 mkdirResp.added.Add(await newDir.ToFileInfoAsync(hash, targetHash, volume, connector.Options, cancellationToken: cancellationToken));
@@ -176,9 +175,9 @@ namespace elFinder.Net.Drivers.FileSystem
                 var newDir = new FileSystemDirectory(PathHelper.SafelyCombine(targetPath.Directory.FullName,
                     targetPath.Directory.FullName, dirName), volume);
 
-                OnBeforeMakeDir?.Invoke(this, newDir);
+                await (OnBeforeMakeDir?.Invoke(newDir) ?? Task.CompletedTask);
                 await newDir.CreateAsync(cancellationToken: cancellationToken);
-                OnAfterMakeDir?.Invoke(this, newDir);
+                await (OnAfterMakeDir?.Invoke(newDir) ?? Task.CompletedTask);
 
                 var hash = newDir.GetHash(volume, pathParser);
                 var parentHash = newDir.GetParentHash(volume, pathParser);
@@ -207,9 +206,9 @@ namespace elFinder.Net.Drivers.FileSystem
             var newFile = new FileSystemFile(PathHelper.SafelyCombine(targetPath.Directory.FullName,
                 targetPath.Directory.FullName, cmd.Name), volume);
 
-            OnBeforeMakeFile?.Invoke(this, newFile);
+            await (OnBeforeMakeFile?.Invoke(newFile) ?? Task.CompletedTask);
             await newFile.CreateAsync(cancellationToken: cancellationToken);
-            OnAfterMakeFile?.Invoke(this, newFile);
+            await (OnAfterMakeFile?.Invoke(newFile) ?? Task.CompletedTask);
 
             var mkfileResp = new MkfileResponse();
             mkfileResp.added.Add(await newFile.ToFileInfoAsync(targetHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
@@ -399,9 +398,9 @@ namespace elFinder.Net.Drivers.FileSystem
             {
                 var prevName = targetPath.Directory.Name;
 
-                OnBeforeRename?.Invoke(this, (targetPath.Directory, cmd.Name));
+                await (OnBeforeRename?.Invoke(targetPath.Directory, cmd.Name) ?? Task.CompletedTask);
                 var renamedDir = await targetPath.Directory.RenameAsync(cmd.Name, cancellationToken: cancellationToken);
-                OnAfterRename?.Invoke(this, (targetPath.Directory, prevName));
+                await (OnAfterRename?.Invoke(targetPath.Directory, prevName) ?? Task.CompletedTask);
 
                 var hash = renamedDir.GetHash(volume, pathParser);
                 var phash = renamedDir.GetParentHash(volume, pathParser);
@@ -411,9 +410,9 @@ namespace elFinder.Net.Drivers.FileSystem
             {
                 var prevName = targetPath.File.Name;
 
-                OnBeforeRename?.Invoke(this, (targetPath.File, cmd.Name));
+                await (OnBeforeRename?.Invoke(targetPath.File, cmd.Name) ?? Task.CompletedTask);
                 var renamedFile = await targetPath.File.RenameAsync(cmd.Name, cancellationToken: cancellationToken);
-                OnAfterRename?.Invoke(this, (targetPath.File, prevName));
+                await (OnAfterRename?.Invoke(targetPath.File, prevName) ?? Task.CompletedTask);
 
                 var phash = renamedFile.GetParentHash(volume, pathParser);
                 renameResp.added.Add(await renamedFile.ToFileInfoAsync(phash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
@@ -438,16 +437,16 @@ namespace elFinder.Net.Drivers.FileSystem
                 {
                     if (await path.Directory.ExistsAsync)
                     {
-                        OnBeforeRemove?.Invoke(this, path.Directory);
+                        await (OnBeforeRemove?.Invoke(path.Directory) ?? Task.CompletedTask);
                         await path.Directory.DeleteAsync(cancellationToken: cancellationToken);
-                        OnAfterRemove?.Invoke(this, path.Directory);
+                        await (OnAfterRemove?.Invoke(path.Directory) ?? Task.CompletedTask);
                     }
                 }
                 else if (await path.File.ExistsAsync)
                 {
-                    OnBeforeRemove?.Invoke(this, path.File);
+                    await (OnBeforeRemove?.Invoke(path.File) ?? Task.CompletedTask);
                     await path.File.DeleteAsync(cancellationToken: cancellationToken);
-                    OnAfterRemove?.Invoke(this, path.File);
+                    await (OnAfterRemove?.Invoke(path.File) ?? Task.CompletedTask);
                 }
 
                 rmResp.removed.Add(path.HashedTarget);
@@ -613,9 +612,9 @@ namespace elFinder.Net.Drivers.FileSystem
                                 backupName = await bakFile.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
 
                             var prevName = uploadFileInfo.Name;
-                            OnBeforeRename?.Invoke(this, (uploadFileInfo, backupName));
+                            await (OnBeforeRename?.Invoke(uploadFileInfo, backupName) ?? Task.CompletedTask);
                             await uploadFileInfo.RenameAsync(backupName, cancellationToken: cancellationToken);
-                            OnAfterRename?.Invoke(this, (uploadFileInfo, prevName));
+                            await (OnAfterRename?.Invoke(uploadFileInfo, prevName) ?? Task.CompletedTask);
 
                             uploadResp.added.Add(await uploadFileInfo.ToFileInfoAsync(uploadDirHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                             uploadFileInfo = new FileSystemFile(uploadFullName, volume);
@@ -637,10 +636,10 @@ namespace elFinder.Net.Drivers.FileSystem
                     if (chunkedUploadInfo == null)
                         throw new ConnectionAbortedException();
 
-                    OnBeforeChunkMerged?.Invoke(this, (uploadFileInfo, isOverwrite));
+                    await (OnBeforeChunkMerged?.Invoke(uploadFileInfo, isOverwrite) ?? Task.CompletedTask);
                     chunkedUploadInfo.IsFileTouched = true;
                     await MergeChunksAsync(uploadFileInfo, chunkingDir, isOverwrite, cancellationToken: cancellationToken);
-                    OnAfterChunkMerged?.Invoke(this, (uploadFileInfo, isOverwrite));
+                    await (OnAfterChunkMerged?.Invoke(uploadFileInfo, isOverwrite) ?? Task.CompletedTask);
 
                     connectorManager.ReleaseLockCache(chunkingDir.FullName);
 
@@ -663,11 +662,11 @@ namespace elFinder.Net.Drivers.FileSystem
 
                                 if (chunkingDir.ExistsAsync.Result)
                                 {
-                                    OnBeforeRollbackChunk?.Invoke(this, chunkingDir);
-                                    OnBeforeRemove?.Invoke(this, chunkingDir);
+                                    OnBeforeRollbackChunk?.Invoke(chunkingDir).Wait();
+                                    OnBeforeRemove?.Invoke(chunkingDir).Wait();
                                     chunkingDir.DeleteAsync().Wait();
-                                    OnAfterRemove?.Invoke(this, chunkingDir);
-                                    OnAfterRollbackChunk?.Invoke(this, chunkingDir);
+                                    OnAfterRemove?.Invoke(chunkingDir).Wait();
+                                    OnAfterRollbackChunk?.Invoke(chunkingDir).Wait();
                                 }
                             }
 
@@ -677,17 +676,17 @@ namespace elFinder.Net.Drivers.FileSystem
 
                                 if (uploadFileInfo.ExistsAsync.Result)
                                 {
-                                    OnBeforeRollbackChunk?.Invoke(this, uploadFileInfo);
-                                    OnBeforeRemove?.Invoke(this, uploadFileInfo);
+                                    OnBeforeRollbackChunk?.Invoke(uploadFileInfo).Wait();
+                                    OnBeforeRemove?.Invoke(uploadFileInfo).Wait();
                                     uploadFileInfo.DeleteAsync().Wait();
-                                    OnAfterRemove?.Invoke(this, uploadFileInfo);
-                                    OnAfterRollbackChunk?.Invoke(this, uploadFileInfo);
+                                    OnAfterRemove?.Invoke(uploadFileInfo).Wait();
+                                    OnAfterRollbackChunk?.Invoke(uploadFileInfo).Wait();
                                 }
                             }
                         }
                     }
 
-                    OnUploadError?.Invoke(this, ex);
+                    await (OnUploadError?.Invoke(ex) ?? Task.CompletedTask);
                     throw ex;
                 }
             }
@@ -796,9 +795,9 @@ namespace elFinder.Net.Drivers.FileSystem
                                     if (!dest.CanCreate()) throw new PermissionDeniedException();
 
                                     chunkedUploadInfo.TotalUploaded = 0;
-                                    OnBeforeMakeDir?.Invoke(this, dest);
+                                    OnBeforeMakeDir?.Invoke(dest).Wait();
                                     dest.CreateAsync(cancellationToken: cancellationToken).Wait();
-                                    OnAfterMakeDir?.Invoke(this, dest);
+                                    OnAfterMakeDir?.Invoke(dest).Wait();
 
                                     WriteStatusFileAsync(dest).Wait();
                                 }
@@ -833,9 +832,9 @@ namespace elFinder.Net.Drivers.FileSystem
                                     backupName = await bakFile.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
 
                                 var prevName = finalUploadFileInfo.Name;
-                                OnBeforeRename?.Invoke(this, (finalUploadFileInfo, backupName));
+                                await (OnBeforeRename?.Invoke(finalUploadFileInfo, backupName) ?? Task.CompletedTask);
                                 await finalUploadFileInfo.RenameAsync(backupName, cancellationToken: cancellationToken);
-                                OnAfterRename?.Invoke(this, (finalUploadFileInfo, prevName));
+                                await (OnAfterRename?.Invoke(finalUploadFileInfo, prevName) ?? Task.CompletedTask);
 
                                 uploadResp.added.Add(await finalUploadFileInfo.ToFileInfoAsync(destHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                                 finalUploadFileInfo = new FileSystemFile(finalUploadFullName, volume);
@@ -859,12 +858,12 @@ namespace elFinder.Net.Drivers.FileSystem
                             await WriteStatusFileAsync(dest);
                         }
 
-                        OnBeforeUpload?.Invoke(this, (uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking));
+                        await (OnBeforeUpload?.Invoke(uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking) ?? Task.CompletedTask);
                         using (var fileStream = await uploadFileInfo.OpenWriteAsync(cancellationToken: cancellationToken))
                         {
                             await formFile.CopyToAsync(fileStream, cancellationToken: cancellationToken);
                         }
-                        OnAfterUpload?.Invoke(this, (uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking));
+                        await (OnAfterUpload?.Invoke(uploadFileInfo, finalUploadFileInfo, formFile, isOverwrite, isChunking) ?? Task.CompletedTask);
 
                         if (isFinalUploading)
                         {
@@ -918,11 +917,11 @@ namespace elFinder.Net.Drivers.FileSystem
 
                                         if (dest.ExistsAsync.Result)
                                         {
-                                            OnBeforeRollbackChunk?.Invoke(this, dest);
-                                            OnBeforeRemove?.Invoke(this, dest);
+                                            OnBeforeRollbackChunk?.Invoke(dest).Wait();
+                                            OnBeforeRemove?.Invoke(dest).Wait();
                                             dest.DeleteAsync().Wait();
-                                            OnAfterRemove?.Invoke(this, dest);
-                                            OnAfterRollbackChunk?.Invoke(this, dest);
+                                            OnAfterRemove?.Invoke(dest).Wait();
+                                            OnAfterRollbackChunk?.Invoke(dest).Wait();
                                         }
                                     }
                                 }
@@ -930,11 +929,11 @@ namespace elFinder.Net.Drivers.FileSystem
 
                             if (isExceptionReturned) return new UploadResponse();
 
-                            OnUploadError?.Invoke(this, ex);
+                            await (OnUploadError?.Invoke(ex) ?? Task.CompletedTask);
                             throw ex;
                         }
 
-                        OnUploadError?.Invoke(this, ex);
+                        await (OnUploadError?.Invoke(ex) ?? Task.CompletedTask);
 
                         if (rootCause is PermissionDeniedException pEx)
                         {
@@ -1011,9 +1010,9 @@ namespace elFinder.Net.Drivers.FileSystem
                     if (!dest.CanDelete())
                         throw new PermissionDeniedException($"Permission denied: {volume.GetRelativePath(dest)}");
 
-                    OnBeforeRemove?.Invoke(this, dest);
+                    OnBeforeRemove?.Invoke(dest).Wait();
                     dest.DeleteAsync(cancellationToken: cancellationToken).Wait();
-                    OnAfterRemove?.Invoke(this, dest);
+                    OnAfterRemove?.Invoke(dest).Wait();
                 }
             }
 
@@ -1185,9 +1184,9 @@ namespace elFinder.Net.Drivers.FileSystem
                             backupName = await bakDir.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
 
                         var prevName = newDestDir.Name;
-                        OnBeforeRename?.Invoke(this, (newDestDir, backupName));
+                        await (OnBeforeRename?.Invoke(newDestDir, backupName) ?? Task.CompletedTask);
                         await newDestDir.RenameAsync(backupName, cancellationToken: cancellationToken);
-                        OnAfterRename?.Invoke(this, (newDestDir, prevName));
+                        await (OnAfterRename?.Invoke(newDestDir, prevName) ?? Task.CompletedTask);
 
                         var hash = newDestDir.GetHash(newDestDir.Volume, pathParser);
                         pasteResp.added.Add(await newDestDir.ToFileInfoAsync(hash, dstPath.HashedTarget, newDestDir.Volume, connector.Options, cancellationToken: cancellationToken));
@@ -1202,27 +1201,27 @@ namespace elFinder.Net.Drivers.FileSystem
 
                         if (exists)
                         {
-                            OnBeforeMove?.Invoke(this, (src.Directory, newDest, true));
+                            await (OnBeforeMove?.Invoke(src.Directory, newDest, true) ?? Task.CompletedTask);
                             pastedDir = await MergeAsync(src.Directory, newDest, dstVolume, copyOverwrite, cancellationToken: cancellationToken);
-                            OnBeforeRemove?.Invoke(this, src.Directory);
+                            await (OnBeforeRemove?.Invoke(src.Directory) ?? Task.CompletedTask);
                             await src.Directory.DeleteAsync(cancellationToken: cancellationToken);
-                            OnAfterRemove?.Invoke(this, src.Directory);
-                            OnAfterMove?.Invoke(this, (src.Directory, pastedDir, true));
+                            await (OnAfterRemove?.Invoke(src.Directory) ?? Task.CompletedTask);
+                            await (OnAfterMove?.Invoke(src.Directory, pastedDir, true) ?? Task.CompletedTask);
                         }
                         else
                         {
-                            OnBeforeMove?.Invoke(this, (src.Directory, newDest, false));
+                            await (OnBeforeMove?.Invoke(src.Directory, newDest, false) ?? Task.CompletedTask);
                             pastedDir = await src.Directory.MoveToAsync(newDest, dstVolume, cancellationToken: cancellationToken);
-                            OnAfterMove?.Invoke(this, (src.Directory, pastedDir, false));
+                            await (OnAfterMove?.Invoke(src.Directory, pastedDir, false) ?? Task.CompletedTask);
                         }
 
                         pasteResp.removed.Add(src.HashedTarget);
                     }
                     else
                     {
-                        OnBeforeCopy?.Invoke(this, (src.Directory, newDest, true));
+                        await (OnBeforeCopy?.Invoke(src.Directory, newDest, true) ?? Task.CompletedTask);
                         pastedDir = await CopyToAsync(src.Directory, newDest, dstVolume, copyOverwrite, cancellationToken: cancellationToken);
-                        OnAfterCopy?.Invoke(this, (src.Directory, pastedDir, true));
+                        await (OnAfterCopy?.Invoke(src.Directory, pastedDir, true) ?? Task.CompletedTask);
                     }
 
                     if (pastedDir != null)
@@ -1251,9 +1250,9 @@ namespace elFinder.Net.Drivers.FileSystem
                             backupName = await bakFile.GetCopyNameAsync(cmd.Suffix, cancellationToken: cancellationToken);
 
                         var prevName = newDestFile.Name;
-                        OnBeforeRename?.Invoke(this, (newDestFile, backupName));
+                        await (OnBeforeRename?.Invoke(newDestFile, backupName) ?? Task.CompletedTask);
                         await newDestFile.RenameAsync(backupName, cancellationToken: cancellationToken);
-                        OnAfterRename?.Invoke(this, (newDestFile, prevName));
+                        await (OnAfterRename?.Invoke(newDestFile, prevName) ?? Task.CompletedTask);
 
                         pasteResp.added.Add(await newDestFile.ToFileInfoAsync(dstPath.HashedTarget, newDestFile.Volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                     }
@@ -1295,9 +1294,9 @@ namespace elFinder.Net.Drivers.FileSystem
                     var newName = await src.Directory.GetCopyNameAsync(cancellationToken: cancellationToken);
                     var newDest = PathHelper.SafelyCombine(src.Directory.Parent.FullName, src.Directory.Parent.FullName, newName);
 
-                    OnBeforeCopy?.Invoke(this, (src.Directory, newDest, true));
+                    await (OnBeforeCopy?.Invoke(src.Directory, newDest, true) ?? Task.CompletedTask);
                     var dupDir = await CopyToAsync(src.Directory, newDest, dstVolume, copyOverwrite: false, cancellationToken: cancellationToken);
-                    OnAfterCopy?.Invoke(this, (src.Directory, dupDir, true));
+                    await (OnAfterCopy?.Invoke(src.Directory, dupDir, true) ?? Task.CompletedTask);
 
                     var hash = dupDir.GetHash(src.Volume, pathParser);
                     var parentHash = dupDir.GetParentHash(src.Volume, pathParser);
@@ -1381,7 +1380,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             try
             {
-                OnBeforeArchive?.Invoke(this, newFile);
+                await (OnBeforeArchive?.Invoke(newFile) ?? Task.CompletedTask);
                 using (var fileStream = ZipFile.Open(archivePath, ZipArchiveMode.Update))
                 {
                     foreach (var path in cmd.TargetPaths)
@@ -1399,11 +1398,11 @@ namespace elFinder.Net.Drivers.FileSystem
                         }
                     }
                 }
-                OnAfterArchive?.Invoke(this, newFile);
+                await (OnAfterArchive?.Invoke(newFile) ?? Task.CompletedTask);
             }
             catch (Exception e)
             {
-                OnArchiveError?.Invoke(this, (e, newFile));
+                await (OnArchiveError?.Invoke(e, newFile) ?? Task.CompletedTask);
                 throw e;
             }
 
@@ -1440,9 +1439,9 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 if (!await fromDir.ExistsAsync)
                 {
-                    OnBeforeMakeDir?.Invoke(this, fromDir);
+                    await (OnBeforeMakeDir?.Invoke(fromDir) ?? Task.CompletedTask);
                     await fromDir.CreateAsync(cancellationToken: cancellationToken);
-                    OnAfterMakeDir?.Invoke(this, fromDir);
+                    await (OnAfterMakeDir?.Invoke(fromDir) ?? Task.CompletedTask);
                 }
 
                 var hash = fromDir.GetHash(volume, pathParser);
@@ -1450,7 +1449,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 extractResp.added.Add(await fromDir.ToFileInfoAsync(hash, parentHash, volume, connector.Options, cancellationToken: cancellationToken));
             }
 
-            OnBeforeExtract?.Invoke(this, (parentDir, fromDir, targetPath.File));
+            await (OnBeforeExtract?.Invoke(parentDir, fromDir, targetPath.File) ?? Task.CompletedTask);
             using (var archive = ZipFile.OpenRead(targetPath.File.FullName))
             {
                 foreach (ZipArchiveEntry entry in archive.Entries)
@@ -1469,9 +1468,9 @@ namespace elFinder.Net.Drivers.FileSystem
 
                         if (!await dir.ExistsAsync)
                         {
-                            OnBeforeMakeDir?.Invoke(this, dir);
+                            await (OnBeforeMakeDir?.Invoke(dir) ?? Task.CompletedTask);
                             await dir.CreateAsync(cancellationToken: cancellationToken);
-                            OnAfterMakeDir?.Invoke(this, dir);
+                            await (OnAfterMakeDir?.Invoke(dir) ?? Task.CompletedTask);
                         }
 
                         if (!makedir)
@@ -1493,9 +1492,9 @@ namespace elFinder.Net.Drivers.FileSystem
                         var entryModel = entry.ToEntry();
                         var isOverwrite = await file.ExistsAsync;
 
-                        OnBeforeExtractFile?.Invoke(this, (entryModel, file, isOverwrite));
+                        await (OnBeforeExtractFile?.Invoke(entryModel, file, isOverwrite) ?? Task.CompletedTask);
                         await zipFileArchiver.ExtractToAsync(entry, file, isOverwrite, cancellationToken: cancellationToken);
-                        OnAfterExtractFile?.Invoke(this, (entryModel, file, isOverwrite));
+                        await (OnAfterExtractFile?.Invoke(entryModel, file, isOverwrite) ?? Task.CompletedTask);
 
                         if (!makedir)
                         {
@@ -1506,7 +1505,8 @@ namespace elFinder.Net.Drivers.FileSystem
                     }
                 }
             }
-            OnAfterExtract?.Invoke(this, (parentDir, fromDir, targetPath.File));
+
+            await (OnAfterExtract?.Invoke(parentDir, fromDir, targetPath.File) ?? Task.CompletedTask);
 
             return extractResp;
         }
@@ -1528,12 +1528,12 @@ namespace elFinder.Net.Drivers.FileSystem
                 {
                     var data = ParseDataURIScheme(cmd.Content, nameof(ConnectorCommand.Cmd_Put));
 
-                    OnBeforeWriteData?.Invoke(this, (data, targetFile));
+                    await (OnBeforeWriteData?.Invoke(data, targetFile) ?? Task.CompletedTask);
                     using (var fileStream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                     {
                         fileStream.Write(data, 0, data.Length);
                     }
-                    OnAfterWriteData?.Invoke(this, (data, targetFile));
+                    await (OnAfterWriteData?.Invoke(data, targetFile) ?? Task.CompletedTask);
                 }
                 else
                 {
@@ -1542,12 +1542,12 @@ namespace elFinder.Net.Drivers.FileSystem
                         Func<Task<Stream>> openFunc = async () => await client.GetStreamAsync(cmd.Content);
                         using (var dataStream = await openFunc())
                         {
-                            OnBeforeWriteStream?.Invoke(this, (openFunc, targetFile));
+                            await (OnBeforeWriteStream?.Invoke(openFunc, targetFile) ?? Task.CompletedTask);
                             using (var fileStream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                             {
                                 await dataStream.CopyToAsync(fileStream, StreamConstants.DefaultBufferSize, cancellationToken: cancellationToken);
                             }
-                            OnAfterWriteStream?.Invoke(this, (openFunc, targetFile));
+                            await (OnAfterWriteStream?.Invoke(openFunc, targetFile) ?? Task.CompletedTask);
                         }
                     }
                 }
@@ -1556,22 +1556,22 @@ namespace elFinder.Net.Drivers.FileSystem
             {
                 Func<Task<Stream>> openStreamFunc = async () => await cmd.ContentPath.File.OpenReadAsync(cancellationToken: cancellationToken);
 
-                OnBeforeWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                await (OnBeforeWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                 using (var readStream = await openStreamFunc())
                 {
                     await targetFile.OverwriteAsync(readStream, cancellationToken: cancellationToken);
                 }
-                OnAfterWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                await (OnAfterWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
             }
             else
             {
-                OnBeforeWriteContent?.Invoke(this, (cmd.Content, cmd.Encoding, targetFile));
+                await (OnBeforeWriteContent?.Invoke(cmd.Content, cmd.Encoding, targetFile) ?? Task.CompletedTask);
                 using (var fileStream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                 using (var writer = new StreamWriter(fileStream, Encoding.GetEncoding(cmd.Encoding)))
                 {
                     writer.Write(cmd.Content);
                 }
-                OnAfterWriteContent?.Invoke(this, (cmd.Content, cmd.Encoding, targetFile));
+                await (OnAfterWriteContent?.Invoke(cmd.Content, cmd.Encoding, targetFile) ?? Task.CompletedTask);
             }
 
             await targetFile.RefreshAsync(cancellationToken);
@@ -1611,12 +1611,12 @@ namespace elFinder.Net.Drivers.FileSystem
 
                         ImageWithMimeType image = await getImageFunc();
 
-                        OnBeforeWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnBeforeWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                         using (var stream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                         {
                             await image.ImageStream.CopyToAsync(stream, StreamConstants.DefaultBufferSize, cancellationToken: cancellationToken);
                         }
-                        OnAfterWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnAfterWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                     }
                     break;
                 case ResizeCommand.Mode_Crop:
@@ -1636,12 +1636,12 @@ namespace elFinder.Net.Drivers.FileSystem
 
                         ImageWithMimeType image = await getImageFunc();
 
-                        OnBeforeWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnBeforeWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                         using (var stream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                         {
                             await image.ImageStream.CopyToAsync(stream, StreamConstants.DefaultBufferSize, cancellationToken: cancellationToken);
                         }
-                        OnAfterWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnAfterWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                     }
                     break;
                 case ResizeCommand.Mode_Rotate:
@@ -1661,12 +1661,12 @@ namespace elFinder.Net.Drivers.FileSystem
 
                         ImageWithMimeType image = await getImageFunc();
 
-                        OnBeforeWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnBeforeWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                         using (var stream = await targetFile.OpenWriteAsync(cancellationToken: cancellationToken))
                         {
                             await image.ImageStream.CopyToAsync(stream, StreamConstants.DefaultBufferSize, cancellationToken: cancellationToken);
                         }
-                        OnAfterWriteStream?.Invoke(this, (openStreamFunc, targetFile));
+                        await (OnAfterWriteStream?.Invoke(openStreamFunc, targetFile) ?? Task.CompletedTask);
                     }
                     break;
                 default:
@@ -1901,9 +1901,9 @@ namespace elFinder.Net.Drivers.FileSystem
                 }
             }
 
-            OnBeforeCopy?.Invoke(this, (file, newPath, isOverwrite));
+            await (OnBeforeCopy?.Invoke(file, newPath, isOverwrite) ?? Task.CompletedTask);
             newFile = await file.CopyToAsync(newPath, destVolume, copyOverwrite, cancellationToken: cancellationToken);
-            OnAfterCopy?.Invoke(this, (file, newFile, isOverwrite));
+            await (OnAfterCopy?.Invoke(file, newFile, isOverwrite) ?? Task.CompletedTask);
 
             return newFile;
         }
@@ -1928,25 +1928,25 @@ namespace elFinder.Net.Drivers.FileSystem
                 }
                 else
                 {
-                    OnBeforeMove?.Invoke(this, (file, newPath, true));
+                    await (OnBeforeMove?.Invoke(file, newPath, true) ?? Task.CompletedTask);
 
-                    OnBeforeCopy?.Invoke(this, (file, newPath, true));
+                    await (OnBeforeCopy?.Invoke(file, newPath, true) ?? Task.CompletedTask);
                     newFile = await file.CopyToAsync(newPath, destVolume, true, cancellationToken: cancellationToken);
-                    OnAfterCopy?.Invoke(this, (file, newFile, true));
+                    await (OnAfterCopy?.Invoke(file, newFile, true) ?? Task.CompletedTask);
 
-                    OnBeforeRemove?.Invoke(this, file);
+                    await (OnBeforeRemove?.Invoke(file) ?? Task.CompletedTask);
                     await file.DeleteAsync(cancellationToken: cancellationToken);
-                    OnAfterRemove?.Invoke(this, file);
+                    await (OnAfterRemove?.Invoke(file) ?? Task.CompletedTask);
 
-                    OnAfterMove?.Invoke(this, (file, newFile, true));
+                    await (OnAfterMove?.Invoke(file, newFile, true) ?? Task.CompletedTask);
 
                     return newFile;
                 }
             }
 
-            OnBeforeMove?.Invoke(this, (file, newPath, false));
+            await (OnBeforeMove?.Invoke(file, newPath, false) ?? Task.CompletedTask);
             newFile = await file.MoveToAsync(newPath, destVolume, cancellationToken: cancellationToken);
-            OnAfterMove?.Invoke(this, (file, newFile, false));
+            await (OnAfterMove?.Invoke(file, newFile, false) ?? Task.CompletedTask);
 
             return newFile;
         }
@@ -1976,9 +1976,9 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 if (!await currentNewDest.ExistsAsync)
                 {
-                    OnBeforeMakeDir?.Invoke(this, currentNewDest);
+                    await (OnBeforeMakeDir?.Invoke(currentNewDest) ?? Task.CompletedTask);
                     await currentNewDest.CreateAsync(cancellationToken: cancellationToken);
-                    OnAfterMakeDir?.Invoke(this, currentNewDest);
+                    await (OnAfterMakeDir?.Invoke(currentNewDest) ?? Task.CompletedTask);
                 }
 
                 foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
@@ -2021,9 +2021,9 @@ namespace elFinder.Net.Drivers.FileSystem
 
                 if (!await currentNewDest.ExistsAsync)
                 {
-                    OnBeforeMakeDir?.Invoke(this, currentNewDest);
+                    await (OnBeforeMakeDir?.Invoke(currentNewDest) ?? Task.CompletedTask);
                     await currentNewDest.CreateAsync(cancellationToken: cancellationToken);
-                    OnAfterMakeDir?.Invoke(this, currentNewDest);
+                    await (OnAfterMakeDir?.Invoke(currentNewDest) ?? Task.CompletedTask);
                 }
 
                 foreach (var dir in await currentDir.GetDirectoriesAsync(cancellationToken: cancellationToken))
@@ -2073,7 +2073,7 @@ namespace elFinder.Net.Drivers.FileSystem
 
             try
             {
-                OnBeforeRemoveThumb?.Invoke(this, path);
+                await (OnBeforeRemoveThumb?.Invoke(path) ?? Task.CompletedTask);
                 if (path.IsDirectory)
                 {
                     string thumbPath = await GenerateThumbPathAsync(path.Directory, cancellationToken: cancellationToken);
@@ -2090,11 +2090,11 @@ namespace elFinder.Net.Drivers.FileSystem
                         File.Delete(thumbPath);
                     }
                 }
-                OnAfterRemoveThumb?.Invoke(this, path);
+                await (OnAfterRemoveThumb?.Invoke(path) ?? Task.CompletedTask);
             }
             catch (Exception ex)
             {
-                OnRemoveThumbError?.Invoke(this, ex);
+                await (OnRemoveThumbError?.Invoke(ex) ?? Task.CompletedTask);
             }
         }
 
@@ -2138,7 +2138,7 @@ namespace elFinder.Net.Drivers.FileSystem
                 {
                     await WriteStatusFileAsync(chunkingDir);
 
-                    OnBeforeChunkTransfer?.Invoke(this, (file, destFile, isOverwrite));
+                    await (OnBeforeChunkTransfer?.Invoke(file, destFile, isOverwrite) ?? Task.CompletedTask);
                     using (var readStream = await file.OpenReadAsync(cancellationToken: cancellationToken))
                     using (var memStream = new MemoryStream())
                     {
@@ -2146,17 +2146,17 @@ namespace elFinder.Net.Drivers.FileSystem
                         var bytes = memStream.ToArray();
                         await fileStream.WriteAsync(bytes, 0, bytes.Length);
                     }
-                    OnAfterChunkTransfer?.Invoke(this, (file, destFile, isOverwrite));
+                    await (OnAfterChunkTransfer?.Invoke(file, destFile, isOverwrite) ?? Task.CompletedTask);
 
-                    OnBeforeRemove?.Invoke(this, file);
+                    await (OnBeforeRemove?.Invoke(file) ?? Task.CompletedTask);
                     await file.DeleteAsync(cancellationToken: cancellationToken);
-                    OnAfterRemove?.Invoke(this, file);
+                    await (OnAfterRemove?.Invoke(file) ?? Task.CompletedTask);
                 }
             }
 
-            OnBeforeRemove?.Invoke(this, chunkingDir);
+            await (OnBeforeRemove?.Invoke(chunkingDir) ?? Task.CompletedTask);
             await chunkingDir.DeleteAsync(cancellationToken: cancellationToken);
-            OnAfterRemove?.Invoke(this, chunkingDir);
+            await (OnAfterRemove?.Invoke(chunkingDir) ?? Task.CompletedTask);
         }
 
         private string GetChunkDirectory(IDirectory uploadDir, string uploadingFileName, string cid)

@@ -10,46 +10,96 @@ using System.Threading.Tasks;
 
 namespace elFinder.Net.Core
 {
+    #region Delegates
+    public delegate Task BeforeRemoveThumbAsync(PathInfo pathInfo);
+    public delegate Task AfterRemoveThumbAsync(PathInfo pathInfo);
+    public delegate Task RemoveThumbErrorAsync(Exception exception);
+    public delegate Task BeforeMakeDirAsync(IDirectory directory);
+    public delegate Task AfterMakeDirAsync(IDirectory directory);
+    public delegate Task BeforeMakeFileAsync(IFile file);
+    public delegate Task AfterMakeFileAsync(IFile file);
+    public delegate Task BeforeRenameAsync(IFileSystem fileSystem, string renameTo);
+    public delegate Task AfterRenameAsync(IFileSystem fileSystem, string prevName);
+    public delegate Task BeforeRemoveAsync(IFileSystem file);
+    public delegate Task AfterRemoveAsync(IFileSystem file);
+    public delegate Task BeforeRollbackChunkAsync(IFileSystem file);
+    public delegate Task AfterRollbackChunkAsync(IFileSystem file);
+    public delegate Task BeforeUploadAsync(
+        IFile file,
+        IFile destFile,
+        IFormFileWrapper formFile,
+        bool isOverwrite,
+        bool isChunking);
+    public delegate Task AfterUploadAsync(
+        IFile file,
+        IFile destFile,
+        IFormFileWrapper formFile,
+        bool isOverwrite,
+        bool isChunking);
+    public delegate Task BeforeChunkMergedAsync(IFile file, bool isOverwrite);
+    public delegate Task AfterChunkMergedAsync(IFile file, bool isOverwrite);
+    public delegate Task BeforeChunkTransferAsync(IFile chunkFile, IFile destFile, bool isOverwrite);
+    public delegate Task AfterChunkTransferAsync(IFile chunkFile, IFile destFile, bool isOverwrite);
+    public delegate Task UploadErrorAsync(Exception exception);
+    public delegate Task BeforeMoveAsync(IFileSystem fileSystem, string newDest, bool isOverwrite);
+    public delegate Task AfterMoveAsync(IFileSystem fileSystem, IFileSystem newFileSystem, bool isOverwrite);
+    public delegate Task BeforeCopyAsync(IFileSystem fileSystem, string dest, bool isOverwrite);
+    public delegate Task AfterCopyAsync(IFileSystem fileSystem, IFileSystem newFileSystem, bool isOverwrite);
+    public delegate Task BeforeArchiveAsync(IFile file);
+    public delegate Task AfterArchiveAsync(IFile file);
+    public delegate Task ArchiveErrorAsync(Exception exception, IFile file);
+    public delegate Task BeforeExtractAsync(IDirectory parent, IDirectory fromDir, IFile archivedFile);
+    public delegate Task AfterExtractAsync(IDirectory parent, IDirectory fromDir, IFile archivedFile);
+    public delegate Task BeforeExtractFileAsync(ArchivedFileEntry entry, IFile destFile, bool isOverwrite);
+    public delegate Task AfterExtractFileAsync(ArchivedFileEntry entry, IFile destFile, bool isOverwrite);
+    public delegate Task BeforeWriteDataAsync(byte[] data, IFile file);
+    public delegate Task AfterWriteDataAsync(byte[] data, IFile file);
+    public delegate Task BeforeWriteStreamAsync(Func<Task<Stream>> openStreamFunc, IFile file);
+    public delegate Task AfterWriteStreamAsync(Func<Task<Stream>> openStreamFunc, IFile file);
+    public delegate Task BeforeWriteContentAsync(string content, string encoding, IFile file);
+    public delegate Task AfterWriteContentAsync(string content, string encoding, IFile file);
+    #endregion
+
     public interface IDriver
     {
         #region Events
-        event EventHandler<PathInfo> OnBeforeRemoveThumb;
-        event EventHandler<PathInfo> OnAfterRemoveThumb;
-        event EventHandler<Exception> OnRemoveThumbError;
-        event EventHandler<IDirectory> OnBeforeMakeDir;
-        event EventHandler<IDirectory> OnAfterMakeDir;
-        event EventHandler<IFile> OnBeforeMakeFile;
-        event EventHandler<IFile> OnAfterMakeFile;
-        event EventHandler<(IFileSystem FileSystem, string RenameTo)> OnBeforeRename;
-        event EventHandler<(IFileSystem FileSystem, string PrevName)> OnAfterRename;
-        event EventHandler<IFileSystem> OnBeforeRemove;
-        event EventHandler<IFileSystem> OnAfterRemove;
-        event EventHandler<IFileSystem> OnBeforeRollbackChunk;
-        event EventHandler<IFileSystem> OnAfterRollbackChunk;
-        event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnBeforeUpload;
-        event EventHandler<(IFile File, IFile DestFile, IFormFileWrapper FormFile, bool IsOverwrite, bool IsChunking)> OnAfterUpload;
-        event EventHandler<(IFile File, bool IsOverwrite)> OnBeforeChunkMerged;
-        event EventHandler<(IFile File, bool IsOverwrite)> OnAfterChunkMerged;
-        event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnBeforeChunkTransfer;
-        event EventHandler<(IFile ChunkFile, IFile DestFile, bool IsOverwrite)> OnAfterChunkTransfer;
-        event EventHandler<Exception> OnUploadError;
-        event EventHandler<(IFileSystem FileSystem, string NewDest, bool IsOverwrite)> OnBeforeMove;
-        event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterMove;
-        event EventHandler<(IFileSystem FileSystem, string Dest, bool IsOverwrite)> OnBeforeCopy;
-        event EventHandler<(IFileSystem FileSystem, IFileSystem NewFileSystem, bool IsOverwrite)> OnAfterCopy;
-        event EventHandler<IFile> OnBeforeArchive;
-        event EventHandler<IFile> OnAfterArchive;
-        event EventHandler<(Exception Exception, IFile File)> OnArchiveError;
-        event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnBeforeExtract;
-        event EventHandler<(IDirectory Parent, IDirectory FromDir, IFile ArchivedFile)> OnAfterExtract;
-        event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnBeforeExtractFile;
-        event EventHandler<(ArchivedFileEntry Entry, IFile DestFile, bool IsOverwrite)> OnAfterExtractFile;
-        event EventHandler<(byte[] Data, IFile File)> OnBeforeWriteData;
-        event EventHandler<(byte[] Data, IFile File)> OnAfterWriteData;
-        event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnBeforeWriteStream;
-        event EventHandler<(Func<Task<Stream>> OpenStreamFunc, IFile File)> OnAfterWriteStream;
-        event EventHandler<(string Content, string Encoding, IFile File)> OnBeforeWriteContent;
-        event EventHandler<(string Content, string Encoding, IFile File)> OnAfterWriteContent;
+        event BeforeRemoveThumbAsync OnBeforeRemoveThumb;
+        event AfterRemoveThumbAsync OnAfterRemoveThumb;
+        event RemoveThumbErrorAsync OnRemoveThumbError;
+        event BeforeMakeDirAsync OnBeforeMakeDir;
+        event AfterMakeDirAsync OnAfterMakeDir;
+        event BeforeMakeFileAsync OnBeforeMakeFile;
+        event AfterMakeFileAsync OnAfterMakeFile;
+        event BeforeRenameAsync OnBeforeRename;
+        event AfterRenameAsync OnAfterRename;
+        event BeforeRemoveAsync OnBeforeRemove;
+        event AfterRemoveAsync OnAfterRemove;
+        event BeforeRollbackChunkAsync OnBeforeRollbackChunk;
+        event AfterRollbackChunkAsync OnAfterRollbackChunk;
+        event BeforeUploadAsync OnBeforeUpload;
+        event AfterUploadAsync OnAfterUpload;
+        event BeforeChunkMergedAsync OnBeforeChunkMerged;
+        event AfterChunkMergedAsync OnAfterChunkMerged;
+        event BeforeChunkTransferAsync OnBeforeChunkTransfer;
+        event AfterChunkTransferAsync OnAfterChunkTransfer;
+        event UploadErrorAsync OnUploadError;
+        event BeforeMoveAsync OnBeforeMove;
+        event AfterMoveAsync OnAfterMove;
+        event BeforeCopyAsync OnBeforeCopy;
+        event AfterCopyAsync OnAfterCopy;
+        event BeforeArchiveAsync OnBeforeArchive;
+        event AfterArchiveAsync OnAfterArchive;
+        event ArchiveErrorAsync OnArchiveError;
+        event BeforeExtractAsync OnBeforeExtract;
+        event AfterExtractAsync OnAfterExtract;
+        event BeforeExtractFileAsync OnBeforeExtractFile;
+        event AfterExtractFileAsync OnAfterExtractFile;
+        event BeforeWriteDataAsync OnBeforeWriteData;
+        event AfterWriteDataAsync OnAfterWriteData;
+        event BeforeWriteStreamAsync OnBeforeWriteStream;
+        event AfterWriteStreamAsync OnAfterWriteStream;
+        event BeforeWriteContentAsync OnBeforeWriteContent;
+        event AfterWriteContentAsync OnAfterWriteContent;
         #endregion
 
         Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default);

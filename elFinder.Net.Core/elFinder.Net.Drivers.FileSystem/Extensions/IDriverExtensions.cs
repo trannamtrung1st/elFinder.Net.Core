@@ -12,9 +12,8 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
             IThumbnailBackgroundGenerator generator, IPictureEditor pictureEditor, IVideoEditor videoEditor,
             bool keepRatio = true, CancellationToken cancellationToken = default)
         {
-            driver.OnAfterUpload += async (sender, args) =>
+            driver.OnAfterUpload += async (file, destFile, formFile, isOverwrite, isChunking) =>
             {
-                var file = args.File;
                 MediaType? mediaType = null;
 
                 if ((mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) == null) return;
@@ -24,10 +23,10 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
             };
 
-            driver.OnAfterCopy += async (sender, args) =>
+            driver.OnAfterCopy += async (fileSystem, newFileSystem, isOverwrite) =>
             {
                 MediaType? mediaType = null;
-                if (args.NewFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
+                if (newFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
                     await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
@@ -36,23 +35,23 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 }
             };
 
-            driver.OnAfterExtractFile += async (sender, args) =>
+            driver.OnAfterExtractFile += async (entry, destFile, isOverwrite) =>
             {
-                var file = args.DestFile;
                 MediaType? mediaType = null;
 
-                if ((mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) == null) return;
+                if ((mediaType = destFile.CanGetThumb(pictureEditor, videoEditor, verify: false)) == null) return;
 
-                await file.RefreshAsync(cancellationToken: cancellationToken);
-                var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
-                var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
-                generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
+                await destFile.RefreshAsync(cancellationToken: cancellationToken);
+                var tmbFilePath = await driver.GenerateThumbPathAsync(destFile, cancellationToken: cancellationToken);
+                var tmbFile = driver.CreateFile(tmbFilePath, destFile.Volume);
+                generator.TryAddToQueue(destFile, tmbFile, destFile.Volume.ThumbnailSize, keepRatio, mediaType);
             };
 
-            driver.OnAfterMove += async (sender, args) =>
+            driver.OnAfterMove += async (fileSystem, newFileSystem, isOverwrite) =>
             {
                 MediaType? mediaType = null;
-                if (args.NewFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
+                if (newFileSystem is IFile file
+                    && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
                     await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
@@ -61,10 +60,10 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 }
             };
 
-            driver.OnAfterRename += async (sender, args) =>
+            driver.OnAfterRename += async (IFileSystem fileSystem, string prevName) =>
             {
                 MediaType? mediaType = null;
-                if (args.FileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
+                if (fileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
                 {
                     await file.RefreshAsync(cancellationToken: cancellationToken);
                     var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);

@@ -23,8 +23,9 @@
       "destination": "wwwroot/lib/tinymce-dist"
     },
     {
-      "library": "jqueryui@1.12.1",
-      "destination": "wwwroot/lib/jquery-ui"
+      "library": "jqueryui@latest",
+      "destination": "wwwroot/lib/jquery-ui",
+      "provider": "unpkg"
     },
     {
       "library": "elfinder@2.1.59",
