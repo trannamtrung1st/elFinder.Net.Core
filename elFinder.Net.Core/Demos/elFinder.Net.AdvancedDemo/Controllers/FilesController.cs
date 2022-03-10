@@ -180,9 +180,22 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             // Events
             _driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
             {
-                Console.WriteLine($"Uploaded to: {destFile?.FullName}");
+                if (!isChunking)
+                {
+                    Console.WriteLine($"Uploaded to: {destFile?.FullName}");
+                    var status = CurrentUploadStatus;
+                    status.UploadedFiles.Add(file.Name);
+                }
+
+                return Task.CompletedTask;
+            };
+
+            _driver.OnAfterChunkMerged += (file, isOverwrite) =>
+            {
+                Console.WriteLine($"Uploaded to: {file?.FullName}");
                 var status = CurrentUploadStatus;
                 status.UploadedFiles.Add(file.Name);
+
                 return Task.CompletedTask;
             };
 
