@@ -12,8 +12,10 @@ using elFinder.Net.Plugins.FileSystemQuotaManagement;
 using elFinder.Net.Plugins.FileSystemQuotaManagement.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,6 +28,8 @@ namespace elFinder.Net.AdvancedDemo.Controllers
     [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
     public class FilesController : Controller
     {
+        private const int HeartbeatInterval = 5000;
+
         private readonly IConnector _connector;
         private readonly IDriver _driver;
         private readonly IThumbnailBackgroundGenerator _thumbnailGenerator;
@@ -33,6 +37,14 @@ namespace elFinder.Net.AdvancedDemo.Controllers
         private readonly IVideoEditor _videoEditor;
         private readonly IStorageManager _storageManager;
         private readonly DataContext _dataContext;
+
+        private static readonly ConcurrentDictionary<string, UploadPulseModel> UploadStatus
+            = new ConcurrentDictionary<string, UploadPulseModel>();
+
+        private UploadPulseModel CurrentUploadStatus => UploadStatus.GetOrAdd(User.Identity?.Name, (key) => new UploadPulseModel
+        {
+            UploadedFiles = new List<string>(),
+        });
 
         public FilesController(IConnector connector,
             IDriver driver,
@@ -80,6 +92,29 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             var fullPath = Startup.MapStoragePath(path);
 
             return await this.GetPhysicalFileAsync(_connector, fullPath, HttpContext.RequestAborted);
+        }
+
+        [HttpPost("upload-pulse")]
+        public IActionResult PulseUpload()
+        {
+            var userId = User.Identity.Name;
+            var status = CurrentUploadStatus;
+
+            status.LastPulse = DateTimeOffset.UtcNow;
+
+            Task.Run(async () =>
+            {
+                await Task.Delay(HeartbeatInterval);
+                var currentStatus = UploadStatus[userId];
+                var timeSpan = DateTimeOffset.UtcNow - status.LastPulse;
+                if (timeSpan.TotalMilliseconds > HeartbeatInterval)
+                {
+                    Console.WriteLine($"{currentStatus.UploadedFiles.Count()} uploaded.");
+                    UploadStatus.Remove(userId, out _);
+                }
+            });
+
+            return NoContent();
         }
 
         private void CustomizeResponse(ConnectorResult connectorResult, IVolume volume, long quota)
@@ -146,6 +181,8 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             _driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
             {
                 Console.WriteLine($"Uploaded to: {destFile?.FullName}");
+                var status = CurrentUploadStatus;
+                status.UploadedFiles.Add(file.Name);
                 return Task.CompletedTask;
             };
 
