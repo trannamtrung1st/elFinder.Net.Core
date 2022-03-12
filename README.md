@@ -9,7 +9,8 @@
 The [advanced demo project](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Demos/elFinder.Net.AdvancedDemo) has some additional use cases enabled, including:
 - Integrate Authentication/Authorization (Cookies, OAuth2 JWT).
 - Multi-tenant support.
-- Events
+- Events.
+- Some customized behaviors can be done outside the core library.
 - Integrate [Quota management plugin](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Plugins/elFinder.Net.Plugins.FileSystemQuotaManagement).
 - For an example of how to write a plugin, see [Logging plugin example](https://github.com/trannamtrung1st/elFinder.Net.Core/tree/main/elFinder.Net.Core/Plugins/elFinder.Net.Plugins.LoggingExample). 
 This plugin intercepts all method calls of `IConnector` and `IDriver` instances then logs the method's information (arguments, method name, return value, .etc) to the console output.
