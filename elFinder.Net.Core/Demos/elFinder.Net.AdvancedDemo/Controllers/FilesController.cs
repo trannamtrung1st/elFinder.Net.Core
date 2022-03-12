@@ -97,23 +97,8 @@ namespace elFinder.Net.AdvancedDemo.Controllers
         [HttpPost("upload-pulse")]
         public IActionResult PulseUpload()
         {
-            var userId = User.Identity.Name;
-            var status = CurrentUploadStatus;
-
-            status.LastPulse = DateTimeOffset.UtcNow;
-
-            Task.Run(async () =>
-            {
-                await Task.Delay(HeartbeatInterval);
-                var currentStatus = UploadStatus[userId];
-                var timeSpan = DateTimeOffset.UtcNow - status.LastPulse;
-                if (timeSpan.TotalMilliseconds > HeartbeatInterval)
-                {
-                    Console.WriteLine($"{currentStatus.UploadedFiles.Count()} uploaded.");
-                    UploadStatus.Remove(userId, out _);
-                }
-            });
-
+            // Uncomment if you want to use client pulse instead
+            //UpdatePulseStatus();
             return NoContent();
         }
 
@@ -178,6 +163,12 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             //_driver.SetupBackgroundThumbnailGenerator(_thumbnailGenerator, _pictureEditor, _videoEditor, cancellationToken: cancellationToken);
 
             // Events
+            _driver.OnBeforeUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
+            {
+                UpdatePulseStatus();
+                return Task.CompletedTask;
+            };
+
             _driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
             {
                 if (!isChunking)
@@ -306,6 +297,26 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             #endregion
 
             return (volume, quota);
+        }
+
+        private void UpdatePulseStatus()
+        {
+            var userId = User.Identity.Name;
+            var status = CurrentUploadStatus;
+
+            status.LastPulse = DateTimeOffset.UtcNow;
+
+            Task.Run(async () =>
+            {
+                await Task.Delay(HeartbeatInterval);
+                var currentStatus = UploadStatus[userId];
+                var timeSpan = DateTimeOffset.UtcNow - status.LastPulse;
+                if (timeSpan.TotalMilliseconds > HeartbeatInterval)
+                {
+                    Console.WriteLine($"{currentStatus.UploadedFiles.Count()} uploaded.");
+                    UploadStatus.Remove(userId, out _);
+                }
+            });
         }
     }
 }

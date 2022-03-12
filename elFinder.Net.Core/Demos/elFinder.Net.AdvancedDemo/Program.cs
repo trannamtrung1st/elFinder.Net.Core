@@ -20,7 +20,7 @@ namespace elFinder.Net.AdvancedDemo
                     Id = 1,
                     UserName = "mrdavid",
                     VolumePath = "mrdavid",
-                    QuotaInBytes = 10 * (long)Math.Pow(1024, 2),
+                    QuotaInBytes = 500 * (long)Math.Pow(1024, 2),
                 }, new AppUser
                 {
                     Id = 2,
