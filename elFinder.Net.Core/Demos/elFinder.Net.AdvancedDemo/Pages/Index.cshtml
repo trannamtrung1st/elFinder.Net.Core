@@ -82,35 +82,38 @@
                 elf.getUI('stat').append(info);
             };
 
-            const sendUploadPulse = () => {
-                $.ajax({
-                    method: 'POST',
-                    url: '/api/files/upload-pulse',
-                    success: () => console.log('Pulse success!'),
-                    error: () => console.log('Pulse failed!')
-                });
-            };
-
             elf.bind('open', function (e, fm) {
                 fmInstance = fm;
                 fm.getUI().data('_quota', e.data.quota);
                 fm.getUI().data('_usage', e.data.usage);
-            }).bind('opendone', elfinderSetVolumeSize)
-            .bind('upload', (e, fm) => {
-                if (uploading) return;
-                uploading = true;
-                sendUploadPulse();
-                const ntfNode = fm.getUI('notify');
-                const pulseIntervalId = setInterval(() => {
-                    const hasDialog = ntfNode.children('.elfinder-notify-upload').length ? true : false;
-                    if (hasDialog) {
-                        sendUploadPulse();
-                    } else {
-                        uploading = false;
-                        clearInterval(pulseIntervalId);
-                    }
-                }, 2000);
-            });
+            }).bind('opendone', elfinderSetVolumeSize);
+
+            if (false) { // Remove this if you want to use client notification for upload status
+                const sendUploadPulse = () => {
+                    $.ajax({
+                        method: 'POST',
+                        url: '/api/files/upload-pulse',
+                        success: () => console.log('Pulse success!'),
+                        error: () => console.log('Pulse failed!')
+                    });
+                };
+
+                elf.bind('upload', (e, fm) => {
+                    if (uploading) return;
+                    uploading = true;
+                    sendUploadPulse();
+                    const ntfNode = fm.getUI('notify');
+                    const pulseIntervalId = setInterval(() => {
+                        const hasDialog = ntfNode.children('.elfinder-notify-upload').length ? true : false;
+                        if (hasDialog) {
+                            sendUploadPulse();
+                        } else {
+                            uploading = false;
+                            clearInterval(pulseIntervalId);
+                        }
+                    }, 700);
+                });
+            }
 
             // Example for avoiding draggable for locked objects
             $('#elfinder').on('mouseover', (e) => {
