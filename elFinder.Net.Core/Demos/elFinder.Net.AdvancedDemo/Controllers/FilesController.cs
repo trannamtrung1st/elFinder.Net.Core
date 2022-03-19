@@ -162,13 +162,13 @@ namespace elFinder.Net.AdvancedDemo.Controllers
             //_driver.SetupBackgroundThumbnailGenerator(_thumbnailGenerator, _pictureEditor, _videoEditor, cancellationToken: cancellationToken);
 
             // Events
-            _driver.OnBeforeUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
+            _driver.OnBeforeUpload.Add((file, destFile, formFile, isOverwrite, isChunking) =>
             {
                 UpdatePulseStatus();
                 return Task.CompletedTask;
-            };
+            });
 
-            _driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
+            _driver.OnAfterUpload.Add((file, destFile, formFile, isOverwrite, isChunking) =>
             {
                 if (!isChunking)
                 {
@@ -179,16 +179,16 @@ namespace elFinder.Net.AdvancedDemo.Controllers
                 }
 
                 return Task.CompletedTask;
-            };
+            });
 
-            _driver.OnAfterChunkMerged += (file, isOverwrite) =>
+            _driver.OnAfterChunkMerged.Add((file, isOverwrite) =>
             {
                 Console.WriteLine($"Uploaded to: {file?.FullName}");
                 var status = CurrentUploadStatus;
                 status.UploadedFiles.Add(file.Name);
                 StartUploadDoneChecking();
                 return Task.CompletedTask;
-            };
+            });
 
             // Quota management: This is set up per volume. Use VolumeId as key.
             // The plugin support quota management on Volume (root) level only. It means that you can not set quota for directories.

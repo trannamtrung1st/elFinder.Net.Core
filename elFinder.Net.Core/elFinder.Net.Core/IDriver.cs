@@ -63,43 +63,43 @@ namespace elFinder.Net.Core
     public interface IDriver
     {
         #region Events
-        event BeforeRemoveThumbAsync OnBeforeRemoveThumb;
-        event AfterRemoveThumbAsync OnAfterRemoveThumb;
-        event RemoveThumbErrorAsync OnRemoveThumbError;
-        event BeforeMakeDirAsync OnBeforeMakeDir;
-        event AfterMakeDirAsync OnAfterMakeDir;
-        event BeforeMakeFileAsync OnBeforeMakeFile;
-        event AfterMakeFileAsync OnAfterMakeFile;
-        event BeforeRenameAsync OnBeforeRename;
-        event AfterRenameAsync OnAfterRename;
-        event BeforeRemoveAsync OnBeforeRemove;
-        event AfterRemoveAsync OnAfterRemove;
-        event BeforeRollbackChunkAsync OnBeforeRollbackChunk;
-        event AfterRollbackChunkAsync OnAfterRollbackChunk;
-        event BeforeUploadAsync OnBeforeUpload;
-        event AfterUploadAsync OnAfterUpload;
-        event BeforeChunkMergedAsync OnBeforeChunkMerged;
-        event AfterChunkMergedAsync OnAfterChunkMerged;
-        event BeforeChunkTransferAsync OnBeforeChunkTransfer;
-        event AfterChunkTransferAsync OnAfterChunkTransfer;
-        event UploadErrorAsync OnUploadError;
-        event BeforeMoveAsync OnBeforeMove;
-        event AfterMoveAsync OnAfterMove;
-        event BeforeCopyAsync OnBeforeCopy;
-        event AfterCopyAsync OnAfterCopy;
-        event BeforeArchiveAsync OnBeforeArchive;
-        event AfterArchiveAsync OnAfterArchive;
-        event ArchiveErrorAsync OnArchiveError;
-        event BeforeExtractAsync OnBeforeExtract;
-        event AfterExtractAsync OnAfterExtract;
-        event BeforeExtractFileAsync OnBeforeExtractFile;
-        event AfterExtractFileAsync OnAfterExtractFile;
-        event BeforeWriteDataAsync OnBeforeWriteData;
-        event AfterWriteDataAsync OnAfterWriteData;
-        event BeforeWriteStreamAsync OnBeforeWriteStream;
-        event AfterWriteStreamAsync OnAfterWriteStream;
-        event BeforeWriteContentAsync OnBeforeWriteContent;
-        event AfterWriteContentAsync OnAfterWriteContent;
+        EventList<BeforeRemoveThumbAsync> OnBeforeRemoveThumb { get; }
+        EventList<AfterRemoveThumbAsync> OnAfterRemoveThumb { get; }
+        EventList<RemoveThumbErrorAsync> OnRemoveThumbError { get; }
+        EventList<BeforeMakeDirAsync> OnBeforeMakeDir { get; }
+        EventList<AfterMakeDirAsync> OnAfterMakeDir { get; }
+        EventList<BeforeMakeFileAsync> OnBeforeMakeFile { get; }
+        EventList<AfterMakeFileAsync> OnAfterMakeFile { get; }
+        EventList<BeforeRenameAsync> OnBeforeRename { get; }
+        EventList<AfterRenameAsync> OnAfterRename { get; }
+        EventList<BeforeRemoveAsync> OnBeforeRemove { get; }
+        EventList<AfterRemoveAsync> OnAfterRemove { get; }
+        EventList<BeforeRollbackChunkAsync> OnBeforeRollbackChunk { get; }
+        EventList<AfterRollbackChunkAsync> OnAfterRollbackChunk { get; }
+        EventList<BeforeUploadAsync> OnBeforeUpload { get; }
+        EventList<AfterUploadAsync> OnAfterUpload { get; }
+        EventList<BeforeChunkMergedAsync> OnBeforeChunkMerged { get; }
+        EventList<AfterChunkMergedAsync> OnAfterChunkMerged { get; }
+        EventList<BeforeChunkTransferAsync> OnBeforeChunkTransfer { get; }
+        EventList<AfterChunkTransferAsync> OnAfterChunkTransfer { get; }
+        EventList<UploadErrorAsync> OnUploadError { get; }
+        EventList<BeforeMoveAsync> OnBeforeMove { get; }
+        EventList<AfterMoveAsync> OnAfterMove { get; }
+        EventList<BeforeCopyAsync> OnBeforeCopy { get; }
+        EventList<AfterCopyAsync> OnAfterCopy { get; }
+        EventList<BeforeArchiveAsync> OnBeforeArchive { get; }
+        EventList<AfterArchiveAsync> OnAfterArchive { get; }
+        EventList<ArchiveErrorAsync> OnArchiveError { get; }
+        EventList<BeforeExtractAsync> OnBeforeExtract { get; }
+        EventList<AfterExtractAsync> OnAfterExtract { get; }
+        EventList<BeforeExtractFileAsync> OnBeforeExtractFile { get; }
+        EventList<AfterExtractFileAsync> OnAfterExtractFile { get; }
+        EventList<BeforeWriteDataAsync> OnBeforeWriteData { get; }
+        EventList<AfterWriteDataAsync> OnAfterWriteData { get; }
+        EventList<BeforeWriteStreamAsync> OnBeforeWriteStream { get; }
+        EventList<AfterWriteStreamAsync> OnAfterWriteStream { get; }
+        EventList<BeforeWriteContentAsync> OnBeforeWriteContent { get; }
+        EventList<AfterWriteContentAsync> OnAfterWriteContent { get; }
         #endregion
 
         Task SetupVolumeAsync(IVolume volume, CancellationToken cancellationToken = default);

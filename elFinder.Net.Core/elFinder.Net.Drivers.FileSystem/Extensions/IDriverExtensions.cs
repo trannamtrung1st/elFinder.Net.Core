@@ -12,7 +12,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
             IThumbnailBackgroundGenerator generator, IPictureEditor pictureEditor, IVideoEditor videoEditor,
             bool keepRatio = true, CancellationToken cancellationToken = default)
         {
-            driver.OnAfterUpload += async (file, destFile, formFile, isOverwrite, isChunking) =>
+            driver.OnAfterUpload.Add(async (file, destFile, formFile, isOverwrite, isChunking) =>
             {
                 MediaType? mediaType = null;
 
@@ -21,9 +21,9 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 var tmbFilePath = await driver.GenerateThumbPathAsync(file, cancellationToken: cancellationToken);
                 var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                 generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
-            };
+            });
 
-            driver.OnAfterCopy += async (fileSystem, newFileSystem, isOverwrite) =>
+            driver.OnAfterCopy.Add(async (fileSystem, newFileSystem, isOverwrite) =>
             {
                 MediaType? mediaType = null;
                 if (newFileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
@@ -33,9 +33,9 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
                 }
-            };
+            });
 
-            driver.OnAfterExtractFile += async (entry, destFile, isOverwrite) =>
+            driver.OnAfterExtractFile.Add(async (entry, destFile, isOverwrite) =>
             {
                 MediaType? mediaType = null;
 
@@ -45,9 +45,9 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                 var tmbFilePath = await driver.GenerateThumbPathAsync(destFile, cancellationToken: cancellationToken);
                 var tmbFile = driver.CreateFile(tmbFilePath, destFile.Volume);
                 generator.TryAddToQueue(destFile, tmbFile, destFile.Volume.ThumbnailSize, keepRatio, mediaType);
-            };
+            });
 
-            driver.OnAfterMove += async (fileSystem, newFileSystem, isOverwrite) =>
+            driver.OnAfterMove.Add(async (fileSystem, newFileSystem, isOverwrite) =>
             {
                 MediaType? mediaType = null;
                 if (newFileSystem is IFile file
@@ -58,9 +58,9 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
                 }
-            };
+            });
 
-            driver.OnAfterRename += async (IFileSystem fileSystem, string prevName) =>
+            driver.OnAfterRename.Add(async (IFileSystem fileSystem, string prevName) =>
             {
                 MediaType? mediaType = null;
                 if (fileSystem is IFile file && (mediaType = file.CanGetThumb(pictureEditor, videoEditor, verify: false)) != null)
@@ -70,7 +70,7 @@ namespace elFinder.Net.Drivers.FileSystem.Extensions
                     var tmbFile = driver.CreateFile(tmbFilePath, file.Volume);
                     generator.TryAddToQueue(file, tmbFile, file.Volume.ThumbnailSize, keepRatio, mediaType);
                 }
-            };
+            });
         }
     }
 }
