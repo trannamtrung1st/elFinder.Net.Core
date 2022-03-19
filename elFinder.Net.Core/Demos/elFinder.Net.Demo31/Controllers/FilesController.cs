@@ -63,12 +63,12 @@ namespace elFinder.Net.Demo31.Controllers
             }
 
             // Events
-            _driver.OnBeforeMove += (fileSystem, newDest, isOverwrite) =>
+            _driver.OnBeforeMove.Add((fileSystem, newDest, isOverwrite) =>
             {
                 Console.WriteLine("Move: " + fileSystem.FullName);
                 Console.WriteLine("To: " + newDest);
                 return Task.CompletedTask;
-            };
+            });
         }
     }
 }

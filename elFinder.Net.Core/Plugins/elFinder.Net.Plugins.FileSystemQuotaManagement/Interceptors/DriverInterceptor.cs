@@ -142,7 +142,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     Func<string, Task<long>> dstCreateFunc = (_) => dstDirectory.GetPhysicalStorageUsageAsync(cancellationToken);
                     long toSize = 0, decreaseSize = 0, fromSize = 0;
 
-                    driver.OnBeforeMove += async (fileSystem, newDest, isOverwrite) =>
+                    driver.OnBeforeMove.Add(async (fileSystem, newDest, isOverwrite) =>
                     {
                         if (fileSystem is IFile file)
                         {
@@ -191,9 +191,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                             proceeded = true;
                         }
-                    };
+                    });
 
-                    driver.OnAfterMove += (fileSystem, newFileSystem, isOverwrite) =>
+                    driver.OnAfterMove.Add((fileSystem, newFileSystem, isOverwrite) =>
                     {
                         if (dstStorageCache == null) return Task.CompletedTask;
 
@@ -208,7 +208,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         fromStorageCache = null;
 
                         return Task.CompletedTask;
-                    };
+                    });
                 }
 
                 try
@@ -260,7 +260,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 Func<string, Task<long>> createFunc = (_) => dstDirectory.GetPhysicalStorageUsageAsync(cancellationToken);
                 long copySize = 0;
 
-                driver.OnBeforeCopy += async (fileSystem, destPath, isOverwrite) =>
+                driver.OnBeforeCopy.Add(async (fileSystem, destPath, isOverwrite) =>
                 {
                     if (fileSystem is IFile file)
                     {
@@ -279,16 +279,16 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                         proceeded = true;
                     }
-                };
+                });
 
-                driver.OnAfterCopy += (fileSystem, destPath, isOverwrite) =>
+                driver.OnAfterCopy.Add((fileSystem, destPath, isOverwrite) =>
                 {
                     if (storageCache == null) return Task.CompletedTask;
                     storageCache.Storage += copySize;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
                     return Task.CompletedTask;
-                };
+                });
             }
 
             try
@@ -318,7 +318,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                 long? rmLength = null;
 
-                driver.OnBeforeRemove += async (IFileSystem fileSystem) =>
+                driver.OnBeforeRemove.Add(async (IFileSystem fileSystem) =>
                 {
                     if (fileSystem is IFile file)
                     {
@@ -329,9 +329,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         rmLength = (await dir
                             .GetSizeAndCountAsync(false, _ => true, _ => true, cancellationToken: cancellationToken)).Size;
                     }
-                };
+                });
 
-                driver.OnAfterRemove += (IFileSystem fileSystem) =>
+                driver.OnAfterRemove.Add((IFileSystem fileSystem) =>
                 {
                     if (rmLength == 0) return Task.CompletedTask;
 
@@ -355,7 +355,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     }
 
                     return Task.CompletedTask;
-                };
+                });
             }
 
             try
@@ -396,7 +396,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                 long uploadLength = 0;
 
-                driver.OnBeforeUpload += async (file, destFile, formFile, isOverwrite, isChunking) =>
+                driver.OnBeforeUpload.Add(async (file, destFile, formFile, isOverwrite, isChunking) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -434,9 +434,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceededDirs.Add(volumeDir);
-                };
+                });
 
-                driver.OnAfterUpload += (file, destFile, formFile, isOverwrite, isChunking) =>
+                driver.OnAfterUpload.Add((file, destFile, formFile, isOverwrite, isChunking) =>
                 {
                     if (storageCache == null && uploadLength == 0) return Task.CompletedTask;
                     storageCache.Storage += uploadLength;
@@ -444,18 +444,18 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     storageManager.Unlock(storageCache);
                     storageCache = null;
                     return Task.CompletedTask;
-                };
+                });
 
                 long transferLength = 0;
                 long originalLength = 0;
                 long tempTransferedLength = 0;
 
-                driver.OnBeforeChunkMerged += async (file, isOverwrite) =>
+                driver.OnBeforeChunkMerged.Add(async (file, isOverwrite) =>
                 {
                     originalLength = isOverwrite ? await file.LengthAsync : 0;
-                };
+                });
 
-                driver.OnBeforeChunkTransfer += async (chunkFile, destFile, isOverwrite) =>
+                driver.OnBeforeChunkTransfer.Add(async (chunkFile, destFile, isOverwrite) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -472,9 +472,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceededDirs.Add(volumeDir);
-                };
+                });
 
-                driver.OnAfterChunkTransfer += (chunkFile, destFile, isOverwrite) =>
+                driver.OnAfterChunkTransfer.Add((chunkFile, destFile, isOverwrite) =>
                 {
                     if (storageCache != null && tempTransferedLength > 0)
                     {
@@ -485,9 +485,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     storageManager.Unlock(storageCache);
                     storageCache = null;
                     return Task.CompletedTask;
-                };
+                });
 
-                driver.OnAfterChunkMerged += (file, isOverwrite) =>
+                driver.OnAfterChunkMerged.Add((file, isOverwrite) =>
                 {
                     if (storageCache == null)
                         (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
@@ -502,9 +502,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     storageCache = null;
 
                     return Task.CompletedTask;
-                };
+                });
 
-                driver.OnUploadError += (Exception exception) =>
+                driver.OnUploadError.Add((Exception exception) =>
                 {
                     storageManager.Unlock(storageCache);
                     storageCache = null;
@@ -513,20 +513,20 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw exception;
 
                     return Task.CompletedTask;
-                };
+                });
 
                 long rmLength = 0;
 
-                driver.OnBeforeRollbackChunk += async (fileSystem) =>
+                driver.OnBeforeRollbackChunk.Add(async (fileSystem) =>
                 {
                     if (fileSystem is IFile file)
                     {
                         rmLength = await file.LengthAsync;
                         proceededDirs.Add(volumeDir);
                     }
-                };
+                });
 
-                driver.OnAfterRollbackChunk += (fileSystem) =>
+                driver.OnAfterRollbackChunk.Add((fileSystem) =>
                 {
                     if (rmLength == 0 || fileSystem is IDirectory) return Task.CompletedTask;
 
@@ -536,7 +536,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     storageCache.Storage -= rmLength;
                     rmLength = 0;
                     return Task.CompletedTask;
-                };
+                });
             }
 
             try
@@ -587,7 +587,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                 long writeLength = 0;
                 long oldLength = 0;
 
-                driver.OnBeforeWriteData += async (data, file) =>
+                driver.OnBeforeWriteData.Add(async (data, file) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -599,18 +599,18 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceeded = true;
-                };
+                });
 
-                driver.OnAfterWriteData += async (data, file) =>
+                driver.OnAfterWriteData.Add(async (data, file) =>
                 {
                     if (storageCache == null) return;
                     await file.RefreshAsync(cancellationToken);
                     storageCache.Storage += await file.LengthAsync - oldLength;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
-                };
+                });
 
-                driver.OnBeforeWriteStream += async (openStreamFunc, file) =>
+                driver.OnBeforeWriteStream.Add(async (openStreamFunc, file) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -631,18 +631,18 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceeded = true;
-                };
+                });
 
-                driver.OnAfterWriteStream += async (openStreamFunc, file) =>
+                driver.OnAfterWriteStream.Add(async (openStreamFunc, file) =>
                 {
                     if (storageCache == null) return;
                     await file.RefreshAsync(cancellationToken);
                     storageCache.Storage += await file.LengthAsync - oldLength;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
-                };
+                });
 
-                driver.OnBeforeWriteContent += async (content, encoding, file) =>
+                driver.OnBeforeWriteContent.Add(async (content, encoding, file) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -654,16 +654,16 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceeded = true;
-                };
+                });
 
-                driver.OnAfterWriteContent += async (content, encoding, file) =>
+                driver.OnAfterWriteContent.Add(async (content, encoding, file) =>
                 {
                     if (storageCache == null) return;
                     await file.RefreshAsync(cancellationToken);
                     storageCache.Storage += await file.LengthAsync - oldLength;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
-                };
+                });
             }
 
             try
@@ -701,7 +701,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                 Func<string, Task<long>> createFunc = (_) => volumeDir.GetPhysicalStorageUsageAsync(cancellationToken);
 
-                driver.OnBeforeArchive += (file) =>
+                driver.OnBeforeArchive.Add((file) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -711,9 +711,9 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     proceeded = true;
 
                     return Task.CompletedTask;
-                };
+                });
 
-                driver.OnAfterArchive += async (file) =>
+                driver.OnAfterArchive.Add(async (file) =>
                 {
                     if (storageCache == null) return;
                     await file.RefreshAsync(cancellationToken);
@@ -734,7 +734,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                     storageCache.Storage += archiveLength;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
-                };
+                });
             }
 
             try
@@ -774,7 +774,7 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
 
                 long extractLength = 0;
 
-                driver.OnBeforeExtractFile += async (entry, destFile, isOverwrite) =>
+                driver.OnBeforeExtractFile.Add(async (entry, destFile, isOverwrite) =>
                 {
                     (storageCache, _) = storageManager.Lock(volume.RootDirectory, createFunc);
 
@@ -788,16 +788,16 @@ namespace elFinder.Net.Plugins.FileSystemQuotaManagement.Interceptors
                         throw new QuotaException(maximum.Value, storageCache.Storage, quotaOptions);
 
                     proceeded = true;
-                };
+                });
 
-                driver.OnAfterExtractFile += (entry, destFile, isOverwrite) =>
+                driver.OnAfterExtractFile.Add((entry, destFile, isOverwrite) =>
                 {
                     if (storageCache == null) return Task.CompletedTask;
                     storageCache.Storage += extractLength;
                     storageManager.Unlock(storageCache);
                     storageCache = null;
                     return Task.CompletedTask;
-                };
+                });
             }
 
             try
