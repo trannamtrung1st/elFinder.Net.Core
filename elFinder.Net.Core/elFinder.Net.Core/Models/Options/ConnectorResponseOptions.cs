@@ -11,14 +11,24 @@ namespace elFinder.Net.Core.Models.Options
             var volume = directory.Volume;
             this.disabled = disabled ?? ConnectorCommand.NotSupportedUICommands;
             this.separator = separator == default ? volume.DirectorySeparatorChar : separator;
+
             path = directory.Volume.Name;
             var relativePath = volume.GetRelativePath(directory);
             if (relativePath != string.Empty)
             {
                 path += this.separator + relativePath.Replace(volume.DirectorySeparatorChar, this.separator);
             }
+
             url = volume.Url ?? string.Empty;
             tmbUrl = volume.ThumbnailUrl ?? string.Empty;
+            uploadMaxConn = volume.MaxUploadConnections;
+            copyOverwrite = (byte)(volume.CopyOverwrite ? 1 : 0);
+
+            if (volume.MaxUploadSize.HasValue)
+            {
+                uploadMaxSize = $"{volume.MaxUploadSizeInMb.Value}M";
+            }
+
             var zipMime = MediaTypeNames.Application.Zip;
             archivers = new ArchiveOptions
             {
@@ -33,9 +43,9 @@ namespace elFinder.Net.Core.Models.Options
 
         public ArchiveOptions archivers { get; set; }
 
-        public IEnumerable<string> disabled { get; }
+        public IEnumerable<string> disabled { get; set; }
 
-        public byte copyOverwrite => 1;
+        public byte copyOverwrite { get; set; }
 
         public string path { get; set; }
 
@@ -43,9 +53,9 @@ namespace elFinder.Net.Core.Models.Options
 
         public string tmbUrl { get; set; }
 
-        public string trashHash => string.Empty;
+        public string trashHash { get; set; } = string.Empty;
 
-        public int uploadMaxConn { get; set; } = 1;
+        public int uploadMaxConn { get; set; }
 
         public string uploadMaxSize { get; set; }
 

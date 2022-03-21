@@ -276,11 +276,6 @@ namespace elFinder.Net.Drivers.FileSystem
                     await AddParentsToListAsync(targetPath, initResp.files, cancellationToken: cancellationToken);
                 }
 
-                if (currentVolume.MaxUploadSize.HasValue)
-                    initResp.options.uploadMaxSize = $"{currentVolume.MaxUploadSizeInMb.Value}M";
-
-                initResp.options.uploadMaxConn = currentVolume.MaxUploadConnections;
-
                 openResp = initResp;
             }
             else
