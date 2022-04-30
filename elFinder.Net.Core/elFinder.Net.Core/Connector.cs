@@ -483,6 +483,7 @@ namespace elFinder.Net.Core
                             searchCmd.TargetPath = await ParsePathAsync(searchCmd.Target, cancellationToken: cancellationToken);
                             searchCmd.Q = args.GetValueOrDefault(ConnectorCommand.Param_Q);
                             searchCmd.Mimes = args.GetValueOrDefault(ConnectorCommand.Param_MimesArr);
+                            searchCmd.Type = args.GetValueOrDefault(ConnectorCommand.Param_Type);
                             cmd.CmdObject = searchCmd;
 
                             SearchResponse finalSearchResp;

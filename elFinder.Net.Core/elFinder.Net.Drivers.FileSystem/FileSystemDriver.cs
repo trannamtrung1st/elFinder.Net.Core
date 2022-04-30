@@ -29,6 +29,7 @@ namespace elFinder.Net.Drivers.FileSystem
     {
         public const string ChunkingFolderPrefix = "_uploading_";
         public const string DefaultThumbExt = ".png";
+        public const string CustomSearchMethodPrefix = "SearchMatch";
         private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
 
         protected readonly IPathParser pathParser;
@@ -1320,27 +1321,51 @@ namespace elFinder.Net.Drivers.FileSystem
 
             if (!targetPath.Directory.ObjectAttribute.Read) throw new PermissionDeniedException();
 
-            foreach (var item in await targetPath.Directory.GetFilesAsync(cmd.Q, cmd.Mimes,
-                searchOption: SearchOption.AllDirectories, cancellationToken: cancellationToken))
+            if (!string.IsNullOrWhiteSpace(cmd.Type))
             {
-                var parentHash = item.Parent.Equals(targetPath.Directory) ? targetPath.HashedTarget :
-                    item.GetParentHash(volume, pathParser);
-                searchResp.files.Add(await item.ToFileInfoAsync(parentHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
-            }
+                var method = GetType().GetMethod($"{CustomSearchMethodPrefix}{cmd.Type}",
+                    new Type[] { typeof(SearchCommand), typeof(CancellationToken) });
 
-            if (cmd.Mimes.Count == 0)
+                if (method == null)
+                {
+                    throw new KeyNotFoundException("Custom search function not found");
+                }
+
+                if (method.ReturnType != typeof(Task<SearchResponse>))
+                {
+                    throw new InvalidCastException("Invalid return type");
+                }
+
+                Task<SearchResponse> task = method.Invoke(this, new object[] { cmd, cancellationToken }) as Task<SearchResponse>;
+
+                return task != null
+                    ? await task
+                    : throw new InvalidOperationException("Invalid response from custom search function");
+            }
+            else
             {
-                foreach (var item in await targetPath.Directory.GetDirectoriesAsync(cmd.Q,
+                foreach (var item in await targetPath.Directory.GetFilesAsync(cmd.Q, cmd.Mimes,
                     searchOption: SearchOption.AllDirectories, cancellationToken: cancellationToken))
                 {
-                    var hash = item.GetHash(volume, pathParser);
                     var parentHash = item.Parent.Equals(targetPath.Directory) ? targetPath.HashedTarget :
                         item.GetParentHash(volume, pathParser);
-                    searchResp.files.Add(await item.ToFileInfoAsync(hash, parentHash, volume, connector.Options, cancellationToken: cancellationToken));
+                    searchResp.files.Add(await item.ToFileInfoAsync(parentHash, volume, pathParser, pictureEditor, videoEditor, cancellationToken: cancellationToken));
                 }
-            }
 
-            return searchResp;
+                if (cmd.Mimes.Count == 0)
+                {
+                    foreach (var item in await targetPath.Directory.GetDirectoriesAsync(cmd.Q,
+                        searchOption: SearchOption.AllDirectories, cancellationToken: cancellationToken))
+                    {
+                        var hash = item.GetHash(volume, pathParser);
+                        var parentHash = item.Parent.Equals(targetPath.Directory) ? targetPath.HashedTarget :
+                            item.GetParentHash(volume, pathParser);
+                        searchResp.files.Add(await item.ToFileInfoAsync(hash, parentHash, volume, connector.Options, cancellationToken: cancellationToken));
+                    }
+                }
+
+                return searchResp;
+            }
         }
 
         public virtual async Task<ArchiveResponse> ArchiveAsync(ArchiveCommand cmd, CancellationToken cancellationToken = default)

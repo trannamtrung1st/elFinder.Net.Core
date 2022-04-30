@@ -53,11 +53,13 @@ namespace elFinder.Net.AdvancedDemo
             var pluginCollection = new PluginCollection();
 
             services.AddElFinderAspNetCore()
-                .AddFileSystemDriver(tempFileCleanerConfig: (opt) =>
-                {
-                    opt.ScanFolders.Add(TempPath, TempFileCleanerOptions.DefaultUnmanagedLifeTime);
-                })
-                .AddFileSystemQuotaManagement(pluginCollection)
+                .AddFileSystemDriver(typeof(ApplicationFileSystemDriver),
+                    tempFileCleanerConfig: (opt) =>
+                    {
+                        opt.ScanFolders.Add(TempPath, TempFileCleanerOptions.DefaultUnmanagedLifeTime);
+                    })
+                .AddFileSystemQuotaManagement(pluginCollection,
+                    fileSystemDriverImplType: typeof(ApplicationFileSystemDriver))
                 .AddElFinderLoggingExample(pluginCollection)
                 .AddElFinderPlugins(pluginCollection);
 

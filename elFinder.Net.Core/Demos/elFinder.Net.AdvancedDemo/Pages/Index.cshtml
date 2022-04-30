@@ -22,6 +22,8 @@
             //const appCmds = ['open', ...];
             const appCmds = elFinder.prototype._options.commands;
             elFinder.prototype.i18.en.messages.TextArea = "Edit";
+            elFinder.prototype.i18.en.messages.btnSearchFolder = "Folder only";
+            elFinder.prototype.i18.en.messages.searchFolder = "Search for folder only";
 
             // If you integrate with Quota management plugin
             elFinder.prototype.i18.en.messages.errQuota = "Exceeding quota limits.<br/>Maximum: $1<br/>Usage: $2<br/>"
@@ -54,6 +56,23 @@
                 lang: 'vi',
                 requestType: 'post',
                 uploadMaxChunkSize: 1024 * 1024 * 10,
+                commandsOptions: {
+                    search: {
+                        // Additional search types
+                        searchTypes: {
+                            // "SearchMime" is implemented in default
+                            SearchMime: {           // The key is search type that send to the connector
+                                name: 'btnMime',    // Button text to be processed in i18n()
+                                title: 'searchMime' // Button title to be processed in i18n()
+                            },
+                            // This is custom search method for a function `searchMatchContents()` of your customized volume driver
+                            FolderOnly: {
+                                name: 'btnSearchFolder',
+                                title: 'searchFolder.'
+                            }
+                        }
+                    }
+                }
                 //onlyMimes: ["image", "text/plain"] // Get files of requested mime types only
             };
 
