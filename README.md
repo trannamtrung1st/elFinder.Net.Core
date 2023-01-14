@@ -39,7 +39,7 @@ Plugins:
 ## Credits
 **elFinder.Net.Core** is based on the project [elFinder.NetCore](https://github.com/gordon-matt/elFinder.NetCore) of Matt Gordon. Many thanks for the excellent works.
 For those who may get confused about which package to use, try and find the one that best suits your project.
-I create this with some modification that suits my use cases and the repository is **currently active**. Some of the main differences are:
+I create this with some modification that suits my use cases. Some of the main differences are:
 - Enable better security, ACL (for both Frontend and Backend) 
 - Support .NET Standard 2.0 (remove ASP.NET Core dependency).
 - Customizable through models, interfaces, and events.
